@@ -1,0 +1,23 @@
+/**
+
+@page page_installation_with_apptainer Installation with Apptainer
+
+Here we maintain Apptainer Definition Files for different compilers.
+
+# Build
+
+```shell
+apptainer build <compiler>.sif Apptainer.<compiler>
+```
+
+```shell
+docker run -v ${PWD}:/work --privileged peanoframework/base apptainer build work/<compiler>.sif work/Apptainer.<compiler>
+```
+
+# Usage
+
+```shell
+apptainer shell -e --bind "$PWD" <compiler>.sif
+```
+
+*/

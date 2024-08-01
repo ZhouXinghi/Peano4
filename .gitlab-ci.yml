@@ -1,0 +1,21 @@
+stages:
+  - BuildSystem
+  - Formatting
+  - Publish
+
+Automake_CPU:
+  stage: BuildSystem
+  trigger:
+    include:
+      - .continuous_integration/gitlab-automake-cpu.yml
+    strategy: depend
+
+CMake_CPU:
+  stage: BuildSystem
+  trigger:
+    include:
+      - .continuous_integration/gitlab-cmake-cpu.yml
+    strategy: depend
+
+include:
+  - .continuous_integration/gitlab-pages.yml

@@ -1,0 +1,242 @@
+#include "tarch/mpi/IntegerMessage.h"
+#include "tarch/multicore/Lock.h"
+#include "toolbox/particles/MultiscaleTransitions.h"
+
+
+template <typename T>
+tarch::logging::Log toolbox::particles::SieveParticles<T>::_log("toolbox::particles::SieveParticles<T>");
+
+
+template <typename T>
+int toolbox::particles::SieveParticles<T>::_SieveReductionTag = tarch::mpi::Rank::reserveFreeTag(
+  "toolbox::particles::"
+  "SieveParticles<T>::_"
+  "SieveReductionTag"
+);
+
+
+template <typename T>
+tarch::multicore::BooleanSemaphore toolbox::particles::SieveParticles<T>::_particlesThatCanNotBeLiftedWithinTheirTreeSemaphore;
+
+
+template <typename T>
+tarch::multicore::BooleanSemaphore toolbox::particles::SieveParticles<T>::_particlesToBeSievedSemaphore;
+
+
+template <typename T>
+toolbox::particles::SieveParticles<T>::~SieveParticles() {
+}
+
+
+template <typename T>
+void toolbox::particles::SieveParticles<T>::deleteParticles(ParticleList& list) {
+  for (auto* p : list) {
+    delete p;
+  }
+  list.clear();
+}
+
+
+template <typename T>
+void toolbox::particles::SieveParticles<T>::exchangeSieveListsGlobally(
+    const tarch::la::Vector<Dimensions,double>   domainOffset,
+    const tarch::la::Vector<Dimensions,double>   domainSize,
+    const std::bitset<Dimensions>                periodicBC
+    ) {
+  logDebug("finishedTraversal()", "there are " << _particlesThatHaveToBeSieved.size() << " sieve sets (each tied to one tree or the global sorting, respectively)");
+
+  deleteParticles(_particlesThatHaveToBeSieved);
+
+#ifdef Parallel
+  const int numberOfParticlesToSend = _particlesThatCanNotBeLiftedWithinTheirTree.size();
+  logDebug("finishedTraversal()", "inform all other ranks that I host " << numberOfParticlesToSend << " particles that cannot be sorted locally. Use tag " << _SieveReductionTag);
+  for (int rank = 0; rank < tarch::mpi::Rank::getInstance().getNumberOfRanks(); rank++) {
+    if (rank != tarch::mpi::Rank::getInstance().getRank()) {
+      tarch::mpi::IntegerMessage message(numberOfParticlesToSend);
+      tarch::mpi::IntegerMessage::sendAndPollDanglingMessages(message, rank, _SieveReductionTag, tarch::mpi::Rank::getInstance().getCommunicator());
+    }
+  }
+
+  logDebug("finishedTraversal()", "pack send information (vector of pointers) into array");
+  std::vector<T> sendBuffer; // no pointers here
+  sendBuffer.resize(numberOfParticlesToSend);
+  int i = 0;
+  for (auto& p : _particlesThatCanNotBeLiftedWithinTheirTree) {
+    sendBuffer[i] = *p;
+    i++;
+  }
+
+  for (int rank = 0; rank < tarch::mpi::Rank::getInstance().getNumberOfRanks(); rank++) {
+    if (rank != tarch::mpi::Rank::getInstance().getRank()) {
+      logDebug("finishedTraversal()", "ask rank " << rank << " how many messages have to be received");
+      tarch::mpi::IntegerMessage numberOfReceivedMessages;
+      tarch::mpi::IntegerMessage::receiveAndPollDanglingMessages(numberOfReceivedMessages, rank, _SieveReductionTag, tarch::mpi::Rank::getInstance().getCommunicator());
+      logDebug("finishedTraversal()", "will receive " << numberOfReceivedMessages.getValue() << " particles from rank " << rank);
+
+      MPI_Request* sendRequest    = nullptr;
+      MPI_Request* receiveRequest = nullptr;
+
+      std::vector<T> receiveBuffer; // no pointers here
+      if (numberOfReceivedMessages.getValue() > 0) {
+        receiveRequest = new MPI_Request();
+        receiveBuffer.resize(numberOfReceivedMessages.getValue());
+        MPI_Irecv(
+          receiveBuffer.data(),
+          numberOfReceivedMessages.getValue(),
+          T::getGlobalCommunciationDatatype(),
+          rank,
+          _SieveReductionTag,
+          tarch::mpi::Rank::getInstance().getCommunicator(),
+          receiveRequest
+        );
+      }
+
+      if (numberOfParticlesToSend > 0) {
+        sendRequest = new MPI_Request();
+        MPI_Isend(
+          sendBuffer.data(),
+          numberOfParticlesToSend, // this is important
+          T::getGlobalCommunciationDatatype(),
+          rank,
+          _SieveReductionTag,
+          tarch::mpi::Rank::getInstance().getCommunicator(),
+          sendRequest
+        );
+      }
+
+      logDebug("finishedTraversal()", "issued my sends and receives");
+      int flag = 0;
+      tarch::mpi::Rank::getInstance().setDeadlockWarningTimeStamp();
+      tarch::mpi::Rank::getInstance().setDeadlockTimeOutTimeStamp();
+      while (not flag) {
+        int sendFlag    = 1;
+        int receiveFlag = 1;
+        if (sendRequest != nullptr)
+          MPI_Test(sendRequest, &sendFlag, MPI_STATUS_IGNORE);
+        if (receiveRequest != nullptr)
+          MPI_Test(receiveRequest, &receiveFlag, MPI_STATUS_IGNORE);
+        flag = sendFlag and receiveFlag;
+
+        tarch::mpi::Rank::getInstance().writeTimeOutWarning("toolbox::particles::ParticleSet", "finishedTraversal()", rank, _SieveReductionTag);
+        tarch::mpi::Rank::getInstance().triggerDeadlockTimeOut("toolbox::particles::ParticleSet", "finishedTraversal()", rank, _SieveReductionTag);
+        tarch::services::ServiceRepository::getInstance().receiveDanglingMessages();
+      }
+
+      logDebug("finishedTraversal()", "append " << receiveBuffer.size() << " messages to local sieve particle list");
+      for (int i = 0; i < numberOfReceivedMessages.getValue(); i++) {
+        _particlesThatHaveToBeSieved.push_back(new T(receiveBuffer[i]));
+      }
+
+      if (sendRequest != nullptr)
+        delete sendRequest;
+      if (receiveRequest != nullptr)
+        delete receiveRequest;
+    }
+  }
+#endif
+
+  _particlesThatHaveToBeSieved.insert(
+    _particlesThatHaveToBeSieved.end(), _particlesThatCanNotBeLiftedWithinTheirTree.begin(), _particlesThatCanNotBeLiftedWithinTheirTree.end()
+  );
+
+  // shallow clear, as the pointers have already been rolled over into _particlesThatHaveToBeSieved
+  _particlesThatCanNotBeLiftedWithinTheirTree.clear();
+
+  if (periodicBC.any()){
+    for (auto p: _particlesThatHaveToBeSieved){
+      p->setX( toolbox::particles::applyPeriodicBoundaryConditions( p->getX(), domainOffset, domainSize, periodicBC) );
+    }
+  }
+}
+
+
+template <typename T>
+std::string toolbox::particles::SieveParticles<T>::toString() const {
+  std::ostringstream msg;
+
+  msg << "(#particles-that-cannot-be-lifted=" << _particlesThatCanNotBeLiftedWithinTheirTree.size()
+      << ",#particles-that-have-to-be-sieved=" << _particlesThatHaveToBeSieved.size()
+      << ")";
+
+  return msg.str();
+}
+
+
+template <typename T>
+void toolbox::particles::SieveParticles<T>::deleteParticles() {
+  deleteParticles(_particlesThatCanNotBeLiftedWithinTheirTree);
+  deleteParticles(_particlesThatHaveToBeSieved);
+
+  _particlesThatCanNotBeLiftedWithinTheirTree.clear();
+  _particlesThatHaveToBeSieved.clear();
+}
+
+
+template <typename T>
+toolbox::particles::SieveParticles<T> toolbox::particles::SieveParticles<T>::cloneParticlesToBeSieved() {
+  SieveParticles<T> result;
+
+  for (auto p: _particlesThatHaveToBeSieved) {
+    result._particlesThatHaveToBeSieved.push_back( new T(*p) );
+  }
+
+  logDebug( "cloneParticlesToBeSieved()", "created a clone of the particle set: " << this->toString() << "->" << result.toString() );
+
+  return result;
+}
+
+
+template <typename T>
+void toolbox::particles::SieveParticles<T>::addParticleThatCanNotBeLiftedWithinItsTree(T* p) {
+  logDebug( "addParticleThatCanNotBeLiftedWithinItsTree(T* p)", "particle cannot be lifted: " << p->toString() );
+  _particlesThatCanNotBeLiftedWithinTheirTree.push_back(p);
+}
+
+
+template <typename T>
+int toolbox::particles::SieveParticles<T>::getNumberOfParticlesThatHaveBeSievedIntoVertices() const {
+  return _particlesThatHaveToBeSieved.size();
+}
+
+
+template <typename T>
+bool toolbox::particles::SieveParticles<T>::hasParticlesToBeSievedIntoVertices() const {
+  return not _particlesThatHaveToBeSieved.empty();
+}
+
+
+template <typename T>
+typename toolbox::particles::SieveParticles<T>::ParticleList toolbox::particles::SieveParticles<T>::getParticlesToBeSievedIntoVertex(
+  const peano4::datamanagement::VertexMarker& marker,
+  bool  removeReturnedParticlesFromSet,
+  bool  onlyReturnParticlesThatWillBeLocal,
+  bool  lockSemaphore
+) {
+  tarch::multicore::Lock lock(_particlesToBeSievedSemaphore, removeReturnedParticlesFromSet and lockSemaphore);
+
+  ParticleList                    result;
+  typename ParticleList::iterator p = _particlesThatHaveToBeSieved.begin();
+  while (p != _particlesThatHaveToBeSieved.end()) {
+    bool willBeLocal              = toolbox::particles::particleAssignedToVertexWillBeLocal( (*p)->getX(), marker );
+    if (
+      ::toolbox::particles::sieveParticle(**p, marker)
+      and
+      (willBeLocal or not onlyReturnParticlesThatWillBeLocal)
+    ) {
+      logDebug("getParticlesToBeSievedIntoVertex(...)", "drop particle " << (*p)->toString() << " from global sieve list into vertex " << marker.toString());
+
+      (*p)->setCellH(marker.h());
+
+      result.push_back(*p);
+      if (removeReturnedParticlesFromSet) {
+        p = _particlesThatHaveToBeSieved.erase(p);
+      }
+      else {
+        p++;
+      }
+    } else {
+      p++;
+    }
+  }
+  return result;
+}
