@@ -1,0 +1,37 @@
+/**
+
+@page page_installation_with_docker Installation with Docker
+
+Here we maintain Dockerfiles for different compilers.
+
+# Build
+
+```shell
+docker build -t peanoframework/<compiler> -f Dockerfile.<compiler> .
+```
+
+# Usage
+
+```shell
+docker run -it -v ${PWD}:/work --rm --privileged peanoframework/<compiler> /bin/bash
+```
+
+where `<compiler>` needs to be replaced by the compiler you want to use.
+
+## With GPU Support
+
+```shell
+docker run -it -v ${PWD}:/work --rm --gpus=all --privileged peanoframework/<compiler> /bin/bash
+```
+
+## With Port Forwarding
+
+```shell
+docker run -it -v ${PWD}:/work -p 53155:53155 --rm --privileged peanoframework/<compiler> /bin/bash
+```
+
+# Dockerhub
+
+You can find prebuilt Docker images for each compiler we support at [Dockerhub](https://hub.docker.com/u/peanoframework).
+
+*/

@@ -1,0 +1,55 @@
+#pragma once
+
+namespace {
+  /**
+   * A lot of the loop routines expect a voxel (or face) index which is
+   * a vector over integers. Syntactically, I can just hand over
+   *
+   * <pre>
+     gridCellIndex2d(x,y)
+     </pre>
+   *
+   * Peano's vector class then provides the right constructor to convert
+   * this into a vector object. However, this constructor has to rely on
+   * a while loop that iterates over the arguments. A while loop in return
+   * cannot vectorise or be inlined/unrolled. So I need this helper routine
+   * which is way less elegant, yet knows how often the underlying while
+   * loop is to be unrolled.
+   *
+   * ## Inlining
+   *
+   * I originally had labelled this function with the extension
+   *
+   *
+   *           InlineMethod
+   *
+   *
+   * If you use the GNU compiler, you'll get
+   *
+   * ~~~~~~~~~~~~~~~~~~~~~~~~
+   *  In file included from ../../../src/exahype2/fd/fd4/FD4.h(169),
+   *             from observers/CreateGrid2exahype2_solvers_rkfd_actionsets_InitialCondition0.h(31),
+   *             from observers/CreateGrid2exahype2_solvers_rkfd_actionsets_InitialCondition0.cpp(1):
+   *             ../../../src/exahype2/fd/fd4/../FD_Helper.cpph(19): error: attributes are not permitted in a function definition
+   *             tarch::la::Vector<Dimensions,int> gridCellIndex2d( int x, int y ) InlineMethod {
+   * ~~~~~~~~~~~~~~~~~~~~~~~~
+   *
+   * but the LLVM compiler strand seems to accept them.
+   *
+   *
+   */
+  tarch::la::Vector<Dimensions,int> gridCellIndex2d( int x, int y ) InlineMethod {
+    tarch::la::Vector<Dimensions,int> result;
+    result(0) = x;
+    result(1) = y;
+    return result;
+  }
+
+  tarch::la::Vector<Dimensions,int> gridCellIndex3d( int x, int y, int z ) InlineMethod {
+    tarch::la::Vector<Dimensions,int> result;
+    result(0) = x;
+    result(1) = y;
+    result(2) = z;
+    return result;
+  }
+}

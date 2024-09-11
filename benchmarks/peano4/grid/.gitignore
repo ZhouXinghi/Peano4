@@ -1,0 +1,7 @@
+/Makefile
+/Makefile.in
+/ltmain.sh
+/PeanoGrid*
+/*.pvd
+/*.txt
+/*vtu
