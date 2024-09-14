@@ -55,8 +55,8 @@ time_in_between_two_snapshots = end_time / 100
 """
 Switch between 'Release', 'Debug', 'Asserts', 'Trace', 'Stats'.
 """
-# compile_mode = peano4.output.CompileMode.Release
-compile_mode = peano4.output.CompileMode.Debug
+compile_mode = peano4.output.CompileMode.Release
+# compile_mode = peano4.output.CompileMode.Debug
 
 """
 We first create a new ExaHyPE 2 project.
@@ -76,14 +76,25 @@ This is the way you can add further PDE terms.
 This requires the 'BlockStructured' toolbox and 'ExaHyPE' to be built.
 Rusanov is the type of flux that is used to solve the Riemann problem at boundaries between cells.
 """
-my_solver = exahype2.solvers.fv.rusanov.GlobalAdaptiveTimeStep(
+# my_solver = exahype2.solvers.fv.rusanov.GlobalAdaptiveTimeStep(
+    # name="Euler",
+    # patch_size=patch_size,
+    # unknowns=dimensions + 2,  # [rho, u, v, (w), e]
+    # auxiliary_variables=0,  # This could be something alike material parameters. Not required for Euler.
+    # min_volume_h=volume_size,
+    # max_volume_h=volume_size,
+    # time_step_relaxation=0.5,
+# )
+
+my_solver = exahype2.solvers.fv.rusanov.GlobalAdaptiveTimeStepWithEnclaveTasking(
     name="Euler",
     patch_size=patch_size,
-    unknowns=dimensions + 2,  # [rho, u, v, (w), e]
-    auxiliary_variables=0,  # This could be something alike material parameters. Not required for Euler.
-    min_volume_h=volume_size,
-    max_volume_h=volume_size,
+    unknowns=dimensions + 2,
+    auxiliary_variables=0,
+    min_volume_h=volume_size,  # max_cell_size -> arbitrary value
+    max_volume_h=volume_size,  # min_cell_size -> arbitrary value
     time_step_relaxation=0.5,
+    pde_terms_without_state=True,
 )
 
 """

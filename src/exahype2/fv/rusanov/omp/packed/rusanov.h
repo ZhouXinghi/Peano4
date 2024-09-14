@@ -39,7 +39,7 @@ namespace exahype2::fv::rusanov::omp {
 namespace exahype2::fv::rusanov::omp {
     class PackedDouble {
     public:
-        [[clang::truncate_mantissa(23)]]
+        [[clang::truncate_mantissa(7)]]
         double _d;
     
         PackedDouble() : _d(0.0) 

@@ -44,6 +44,7 @@ void initInputData(double* Q) {
   }
 }
 
+
 int main(int argc, char** argv)
 {
     //std::printf("%d\n", NumberOfInputEntries);
@@ -54,18 +55,20 @@ int main(int argc, char** argv)
     static constexpr int  NumberOfFiniteVolumesPerAxisPerPatch = 8;
     ::exahype2::CellData patchData(patches, ::tarch::MemoryLocation::ManagedSharedAcceleratorDeviceMemory, device);
     
-    for (int i = 0; i < patches; i++) {
-        patchData.QIn[i]           = ::tarch::allocateMemory<double>(NumberOfInputEntries, ::tarch::MemoryLocation::ManagedSharedAcceleratorDeviceMemory, device);
-        patchData.t[i]             = TimeStamp;
-        patchData.dt[i]            = TimeStepSize;
-        patchData.QOut[i]          = ::tarch::allocateMemory<double>(NumberOfOutputEntries, ::tarch::MemoryLocation::ManagedSharedAcceleratorDeviceMemory, device);
-        patchData.cellCentre[i]    = ::tarch::la::Vector<Dimensions, double>(CellOffset + 0.5 * CellSize);
-        patchData.cellSize[i]      = ::tarch::la::Vector<Dimensions, double>(CellSize);
-        patchData.maxEigenvalue[i] = 0.0;
-        initInputData(patchData.QIn[i]);
-        std::memset(patchData.QOut[i], 0.0, NumberOfOutputEntries * sizeof(double));
-    }
-
+    auto initPatchData = [&] {
+        for (int i = 0; i < patches; i++) {
+            patchData.QIn[i]           = ::tarch::allocateMemory<double>(NumberOfInputEntries, ::tarch::MemoryLocation::ManagedSharedAcceleratorDeviceMemory, device);
+            patchData.t[i]             = TimeStamp;
+            patchData.dt[i]            = TimeStepSize;
+            patchData.QOut[i]          = ::tarch::allocateMemory<double>(NumberOfOutputEntries, ::tarch::MemoryLocation::ManagedSharedAcceleratorDeviceMemory, device);
+            patchData.cellCentre[i]    = ::tarch::la::Vector<Dimensions, double>(CellOffset + 0.5 * CellSize);
+            patchData.cellSize[i]      = ::tarch::la::Vector<Dimensions, double>(CellSize);
+            patchData.maxEigenvalue[i] = 0.0;
+            initInputData(patchData.QIn[i]);
+            std::memset(patchData.QOut[i], 0.0, NumberOfOutputEntries * sizeof(double));
+        }
+    };
+    
     //::exahype2::fv::rusanov::timeStepWithRusanovBatchedHeapStateless<
         //FVRusanovSolver,
         //FVRusanovSolver::NumberOfFiniteVolumesPerAxisPerPatch,
@@ -79,49 +82,12 @@ int main(int argc, char** argv)
         //::exahype2::enumerator::AoSLexicographicEnumerator>(patchData, timingComputeKernel, ::peano4::utils::LoopPlacement::Serial);
 
 
-    //TICK(timeStepWithRusanovBatchedHeapStateless)
-    //for (int i = 0; i < 5; ++i) {
-        //::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStateless<
-            //FVRusanovSolver,
-            //FVRusanovSolver::NumberOfFiniteVolumesPerAxisPerPatch,
-            //HaloSize,
-            //FVRusanovSolver::NumberOfUnknowns,
-            //FVRusanovSolver::NumberOfAuxiliaryVariables,
-            //EvaluateFlux,
-            //EvaluateNonconservativeProduct,
-            //EvaluateSource,
-            //EvaluateMaximumEigenvalueAfterTimeStep,
-            //::exahype2::enumerator::AoSLexicographicEnumerator>
-            //(device, patchData, timingComputeKernel);
-    //}
-    //TOCK(timeStepWithRusanovBatchedHeapStateless)
 
-    //TICK(timeStepWithRusanovBatchedHeapStatelessCompression)
-    //for (int i = 0; i < 5; ++i) {
+    initPatchData();
+    TICK(timeStepWithRusanovBatchedHeapStateless)
+    for (int i = 0; i < 50; ++i) {
+        ::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStateless<
         //::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStatelessPacked<
-        ////::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStateless<
-            //FVRusanovSolver,
-            //FVRusanovSolver::NumberOfFiniteVolumesPerAxisPerPatch,
-            //HaloSize,
-            //FVRusanovSolver::NumberOfUnknowns,
-            //FVRusanovSolver::NumberOfAuxiliaryVariables,
-            //EvaluateFlux,
-            //EvaluateNonconservativeProduct,
-            //EvaluateSource,
-            //EvaluateMaximumEigenvalueAfterTimeStep,
-            //::exahype2::enumerator::AoSLexicographicEnumerator
-            ////::exahype2::enumerator::SoALexicographicEnumerator
-        //>
-            //(device, patchData, timingComputeKernel);
-    //}
-    //TOCK(timeStepWithRusanovBatchedHeapStatelessCompression)
-
-    //PackedDouble pd;
-    //pd._d = 2.0;
-    //for (int i = 0; i < 10; ++i) {
-        //::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStatelessPacked<
-        //::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStateless<
-        ::exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStateless<
             FVRusanovSolver,
             FVRusanovSolver::NumberOfFiniteVolumesPerAxisPerPatch,
             HaloSize,
@@ -131,18 +97,59 @@ int main(int argc, char** argv)
             EvaluateNonconservativeProduct,
             EvaluateSource,
             EvaluateMaximumEigenvalueAfterTimeStep,
-            //::exahype2::enumerator::AoSLexicographicEnumerator
-            ::exahype2::enumerator::SoALexicographicEnumerator
+            ::exahype2::enumerator::AoSLexicographicEnumerator>
+            (device, patchData, timingComputeKernel);
+    }
+    TOCK(timeStepWithRusanovBatchedHeapStateless)
+
+    initPatchData();
+    TICK(timeStepWithRusanovBatchedHeapStatelessPacked)
+    for (int i = 0; i < 50; ++i) {
+        ::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStatelessPacked<
+        //::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStateless<
+            FVRusanovSolver,
+            FVRusanovSolver::NumberOfFiniteVolumesPerAxisPerPatch,
+            HaloSize,
+            FVRusanovSolver::NumberOfUnknowns,
+            FVRusanovSolver::NumberOfAuxiliaryVariables,
+            EvaluateFlux,
+            EvaluateNonconservativeProduct,
+            EvaluateSource,
+            EvaluateMaximumEigenvalueAfterTimeStep,
+            ::exahype2::enumerator::AoSLexicographicEnumerator
+            //::exahype2::enumerator::SoALexicographicEnumerator
         >
             (device, patchData, timingComputeKernel);
+    }
+    TOCK(timeStepWithRusanovBatchedHeapStatelessPacked)
+
+    //PackedDouble pd;
+    //pd._d = 2.0;
+    //for (int i = 0; i < 10; ++i) {
+        //::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStatelessPacked<
+        //::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStateless<
+        //::exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStateless<
+            //FVRusanovSolver,
+            //FVRusanovSolver::NumberOfFiniteVolumesPerAxisPerPatch,
+            //HaloSize,
+            //FVRusanovSolver::NumberOfUnknowns,
+            //FVRusanovSolver::NumberOfAuxiliaryVariables,
+            //EvaluateFlux,
+            //EvaluateNonconservativeProduct,
+            //EvaluateSource,
+            //EvaluateMaximumEigenvalueAfterTimeStep,
+            ////::exahype2::enumerator::AoSLexicographicEnumerator
+            //::exahype2::enumerator::SoALexicographicEnumerator
+        //>
+            //(device, patchData, timingComputeKernel);
     //}
 
-        for (int i = 0; i < 5; ++i) {
-            std::printf("%f\n", patchData.maxEigenvalue[i]);
-            for (int j = 0; j < 5; ++j)
-                std::printf("%f\n", patchData.QOut[i][j]);
-            std::printf("\n");
-        }
+        //for (int i = 0; i < 5; ++i) {
+            //std::printf("%f\n", patchData.maxEigenvalue[i]);
+            //for (int j = 0; j < 5; ++j)
+                //std::printf("%f\n", patchData.QOut[i][j]);
+            //std::printf("\n");
+        //}
 
         //for (int i = 0; i < patchData.numberOfCells; ++i) {
             //std::printf("%f\n", patchData.maxEigenvalue[i]);
