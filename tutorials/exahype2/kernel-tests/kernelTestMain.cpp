@@ -68,15 +68,6 @@ int main(int argc, char** argv)
             std::memset(patchData.QOut[i], 0.0, NumberOfOutputEntries * sizeof(double));
         }
     };
-
-    auto printPatch = [&] {
-        for (int i = 0; i < 1; ++i) {
-            std::printf("%f\n", patchData.maxEigenvalue[i]);
-            for (int j = 0; j < 5; ++j)
-                std::printf("%f\n", patchData.QOut[i][j]);
-            std::printf("\n");
-        }
-    };
     
     //::exahype2::fv::rusanov::timeStepWithRusanovBatchedHeapStateless<
         //FVRusanovSolver,
@@ -90,55 +81,82 @@ int main(int argc, char** argv)
         //EvaluateMaximumEigenvalueAfterTimeStep,
         //::exahype2::enumerator::AoSLexicographicEnumerator>(patchData, timingComputeKernel, ::peano4::utils::LoopPlacement::Serial);
 
-    constexpr int repeat = 10;
-
 
 
     initPatchData();
-    TICK(timeStepWithRusanovPatchwiseHeapStateless)
-    for (int i = 0; i < repeat; ++i) {
+    TICK(timeStepWithRusanovBatchedHeapStateless)
+    for (int i = 0; i < 50; ++i) {
         ::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStateless<
-        // ::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStatelessPacked<
-        // ::exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStateless<
+        //::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStatelessPacked<
             FVRusanovSolver,
             FVRusanovSolver::NumberOfFiniteVolumesPerAxisPerPatch,
             HaloSize,
             FVRusanovSolver::NumberOfUnknowns,
             FVRusanovSolver::NumberOfAuxiliaryVariables,
-            true, //EvaluateFlux,
-            false, //EvaluateNonconservativeProduct,
-            false, //EvaluateSource,
-            true, //EvaluateMaximumEigenvalueAfterTimeStep,
+            EvaluateFlux,
+            EvaluateNonconservativeProduct,
+            EvaluateSource,
+            EvaluateMaximumEigenvalueAfterTimeStep,
             ::exahype2::enumerator::AoSLexicographicEnumerator>
             (device, patchData, timingComputeKernel);
     }
-    TOCK(timeStepWithRusanovPatchwiseHeapStateless)
-
-    printPatch();
+    TOCK(timeStepWithRusanovBatchedHeapStateless)
 
     initPatchData();
     TICK(timeStepWithRusanovBatchedHeapStatelessPacked)
-    for (int i = 0; i < repeat; ++i) {
+    for (int i = 0; i < 50; ++i) {
         ::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStatelessPacked<
         //::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStateless<
-        // ::exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessPacked<
             FVRusanovSolver,
             FVRusanovSolver::NumberOfFiniteVolumesPerAxisPerPatch,
             HaloSize,
             FVRusanovSolver::NumberOfUnknowns,
             FVRusanovSolver::NumberOfAuxiliaryVariables,
-            true, //EvaluateFlux,
-            false, //EvaluateNonconservativeProduct,
-            false, //EvaluateSource,
-            true, //EvaluateMaximumEigenvalueAfterTimeStep,
+            EvaluateFlux,
+            EvaluateNonconservativeProduct,
+            EvaluateSource,
+            EvaluateMaximumEigenvalueAfterTimeStep,
             ::exahype2::enumerator::AoSLexicographicEnumerator
             //::exahype2::enumerator::SoALexicographicEnumerator
         >
             (device, patchData, timingComputeKernel);
-            // (device, patchData, timingComputeKernel);
     }
     TOCK(timeStepWithRusanovBatchedHeapStatelessPacked)
-    printPatch();
+
+    //PackedDouble pd;
+    //pd._d = 2.0;
+    //for (int i = 0; i < 10; ++i) {
+        //::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStatelessPacked<
+        //::exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStateless<
+        //::exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStateless<
+            //FVRusanovSolver,
+            //FVRusanovSolver::NumberOfFiniteVolumesPerAxisPerPatch,
+            //HaloSize,
+            //FVRusanovSolver::NumberOfUnknowns,
+            //FVRusanovSolver::NumberOfAuxiliaryVariables,
+            //EvaluateFlux,
+            //EvaluateNonconservativeProduct,
+            //EvaluateSource,
+            //EvaluateMaximumEigenvalueAfterTimeStep,
+            ////::exahype2::enumerator::AoSLexicographicEnumerator
+            //::exahype2::enumerator::SoALexicographicEnumerator
+        //>
+            //(device, patchData, timingComputeKernel);
+    //}
+
+        //for (int i = 0; i < 5; ++i) {
+            //std::printf("%f\n", patchData.maxEigenvalue[i]);
+            //for (int j = 0; j < 5; ++j)
+                //std::printf("%f\n", patchData.QOut[i][j]);
+            //std::printf("\n");
+        //}
+
+        //for (int i = 0; i < patchData.numberOfCells; ++i) {
+            //std::printf("%f\n", patchData.maxEigenvalue[i]);
+            ////for (int j = 0; j < 10; ++j)
+                ////std::printf("%f\n", patchData.QOut[i][j]);
+        //}
+    //}
 
     //::exahype2::fv::rusanov::omp::KernelTest();
 

@@ -18,23 +18,23 @@ void exahype2::fv::rusanov::omp::KernelTest()
     std::printf("Hello\n");
 }
 
-template <
-    class SolverType,
-    int  NumberOfVolumesPerAxisInPatch,
-    int  HaloSize,
-    int  NumberOfUnknowns,
-    int  NumberOfAuxiliaryVariables,
-    bool EvaluateFlux,
-    bool EvaluateNonconservativeProduct,
-    bool EvaluateSource,
-    bool EvaluateMaximumEigenvalueAfterTimeStep,
-    class TempDataEnumeratorType
-> void exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStatelessPacked2(int targetDevice, CellData& patchData, tarch::timing::Measurement& measurement)
-{
-            #pragma omp target device(targetDevice)
-            for (int i = 0; i < 5; ++i) {
-                //currentQInPacked[i].print();
-                std::printf("1\n");
-            }
-}
+// template <
+//     class SolverType,
+//     int  NumberOfVolumesPerAxisInPatch,
+//     int  HaloSize,
+//     int  NumberOfUnknowns,
+//     int  NumberOfAuxiliaryVariables,
+//     bool EvaluateFlux,
+//     bool EvaluateNonconservativeProduct,
+//     bool EvaluateSource,
+//     bool EvaluateMaximumEigenvalueAfterTimeStep,
+//     class TempDataEnumeratorType
+// > void exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStatelessPacked2(int targetDevice, CellData& patchData, tarch::timing::Measurement& measurement)
+// {
+//             #pragma omp target device(targetDevice)
+//             for (int i = 0; i < 5; ++i) {
+//                 //currentQInPacked[i].print();
+//                 std::printf("1\n");
+//             }
+// }
 

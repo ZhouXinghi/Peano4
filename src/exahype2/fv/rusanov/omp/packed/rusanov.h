@@ -21,7 +21,7 @@ namespace exahype2::fv::rusanov::omp {
         class TempDataEnumeratorType
     > void timeStepWithRusanovBatchedHeapStatelessPacked(int targetDevice, CellData& patchData, tarch::timing::Measurement& measurement) InlineMethod;
 
-    template <
+      template <
         class SolverType,
         int  NumberOfVolumesPerAxisInPatch,
         int  HaloSize,
@@ -31,15 +31,15 @@ namespace exahype2::fv::rusanov::omp {
         bool EvaluateNonconservativeProduct,
         bool EvaluateSource,
         bool EvaluateMaximumEigenvalueAfterTimeStep,
-        class TempDataEnumeratorType
-    > void timeStepWithRusanovBatchedHeapStatelessPacked2(int targetDevice, CellData& patchData, tarch::timing::Measurement& measurement) InlineMethod;
+        class TempDataEnumeratorType>
+      KeywordToAvoidDuplicateSymbolsForInlinedFunctions void timeStepWithRusanovPatchwiseHeapStatelessPacked(int targetDevice, CellData& patchData) InlineMethod;
 
 }// namespace exahype2::fv::rusanov::omp
  
 namespace exahype2::fv::rusanov::omp {
     class PackedDouble {
     public:
-        [[clang::truncate_mantissa(7)]]
+        [[clang::truncate_mantissa(20)]]
         double _d;
     
         PackedDouble() : _d(0.0) 
@@ -69,3 +69,4 @@ namespace exahype2::fv::rusanov::omp {
 
 #include "KernelTest.cpph"
 #include "BatchedStatelessPacked.cpph"
+#include "PatchwiseStatelessPacked.cpph"
