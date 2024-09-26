@@ -13,8 +13,7 @@ build_modes = {
     "Stats": peano4.output.CompileMode.Stats,
     "Debug": peano4.output.CompileMode.Debug,
 }
-# build_mode = "Release"
-build_mode = "Debug"
+build_mode = "Release"
 
 parser = argparse.ArgumentParser(
     description="ExaHyPE 2 - Finite Volumes Rusanov Kernel Benchmarking Script"
@@ -150,8 +149,7 @@ my_project = exahype2.Project(
 my_solver = exahype2.solvers.fv.rusanov.GlobalAdaptiveTimeStepWithEnclaveTasking(
     name="FVRusanovSolver",
     patch_size=args.patch_size,
-    # unknowns={"rho": 1, "v": args.dim, "e": 1},
-    unknowns=args.dim + 2,
+    unknowns={"p": 1, "v": args.dim},
     auxiliary_variables=0,
     min_volume_h=0.001,  # max_cell_size -> arbitrary value
     max_volume_h=0.001,  # min_cell_size -> arbitrary value
@@ -162,18 +160,16 @@ my_solver = exahype2.solvers.fv.rusanov.GlobalAdaptiveTimeStepWithEnclaveTasking
 my_solver.set_implementation(
     initial_conditions="",
     boundary_conditions=exahype2.solvers.PDETerms.Empty_Implementation,
-    flux="::applications::exahype2::euler::flux(Q, normal, F);",
-    eigenvalues="return ::applications::exahype2::euler::maxEigenvalue(Q, normal);",
+    flux="::applications::exahype2::acousticwave::flux(Q, normal, F);",
+    eigenvalues="return ::applications::exahype2::acousticwave::maxEigenvalue();",
     refinement_criterion=exahype2.solvers.PDETerms.Empty_Implementation,
-    # There is a bug in the code generator: When set to 'None_Implementation', an offloadable function is still generated, also 'Empty_Implementation' does not work.
-    # TODO: What is the difference between 'None_Implementation' and 'Empty_Implementation'?
-    source_term="",
+    source_term="::applications::exahype2::acousticwave::sourceTerm(Q, volumeCentre, t, S);",
     ncp="",
 )
 
 my_solver.add_user_solver_includes(
     """
-#include "../../../../applications/exahype2/euler/EulerKernels.h"
+#include "../../applications/exahype2/acoustic-wave/AcousticWaveKernels.h"
 """
 )
 
@@ -181,7 +177,7 @@ my_project.add_solver(my_solver)
 
 my_project.set_global_simulation_parameters(
     dimensions=args.dim,
-    size=[1.0, 1.0, 1.0][0 : args.dim],
+    size=[10.0, 10.0, 10.0][0 : args.dim],
     offset=[0.0, 0.0, 0.0][0 : args.dim],
     min_end_time=0.1,
     max_end_time=0.1,
@@ -192,8 +188,6 @@ my_project.set_global_simulation_parameters(
 
 my_project.set_Peano4_installation("../../../../", mode=build_modes[args.build_mode])
 my_project = my_project.generate_Peano4_project(verbose=True)
-
-my_project.output.makefile.add_cpp_file("KernelBenchmarksFVRusanov-main.cpp")
 
 my_project.constants.export_constexpr_with_type("Accuracy", str(accuracy), "double")
 my_project.constants.export_constexpr_with_type(
@@ -216,7 +210,9 @@ else:
 
 my_project.constants.export_boolean("EvaluateFlux", True)
 my_project.constants.export_boolean("EvaluateNonconservativeProduct", False)
-my_project.constants.export_boolean("EvaluateSource", False)
+my_project.constants.export_boolean(
+    "EvaluateSource", False
+)  # TODO: Should be set to True once the correctness has been validated.
 my_project.constants.export_boolean(
     "EvaluateMaximumEigenvalueAfterTimeStep", True if args.eval_eig else False
 )  # Reduction
@@ -232,10 +228,30 @@ else:
         "EvaluateDeviceKernels", True if args.eval_gpu else False
     )
 
-my_project.constants.define_value("GAMMA", str(1.0))
+my_project.constants.define_value("RHO", str(1.0))
+my_project.constants.define_value("WAVE_SPEED", str(1.0))
+my_project.constants.define_value("SIGMA", str(1.0))
+
+os.system(
+    "cp {} KernelBenchmarksFVRusanov-main.cpp".format(
+        "../KernelBenchmarksFVRusanov-main.cpp"
+    )
+)
+
+os.system(
+    "cp {} CMakeLists.txt".format(
+        "../CMakeLists.txt"
+    )
+)
+
+os.system(
+    "cp {} cmake.sh".format(
+        "../cmake.sh"
+    )
+)
 
 my_project.build(
-    make=not args.no_make, make_clean_first=True, throw_away_data_after_build=True
+    make=False, make_clean_first=True, throw_away_data_after_build=True
 )
 
 print("Executable is ", executable_name)

@@ -1,22 +1,7 @@
 // This file is part of the ExaHyPE2 project. For conditions of distribution and
 // use, please see the copyright notice at www.peano-framework.org
-//#include <cstdio>
-
 
 namespace exahype2::fv::rusanov::omp::internal {
-    void copy(PackedDouble* dst, const double* src, int count) InlineMethod
-    {
-        for (int i = 0; i < count; ++i) {
-            dst[i]._d = src[i];
-        }
-    }
-    void copyPackedToDouble(double* dst, const PackedDouble* src, int count) InlineMethod 
-    {
-        for (int i = 0; i < count; ++i) {
-            dst[i] = src[i]._d;
-        }
-    }
-
   template <
     class SolverType,
     int  NumberOfVolumesPerAxisInPatch,
@@ -28,7 +13,7 @@ namespace exahype2::fv::rusanov::omp::internal {
     bool EvaluateSource,
     bool EvaluateMaximumEigenvalueAfterTimeStep,
     class TempDataEnumeratorType>
-  KeywordToAvoidDuplicateSymbolsForInlinedFunctions void timeStepWithRusanovBatchedStatelessPacked(
+  KeywordToAvoidDuplicateSymbolsForInlinedFunctions void timeStepWithRusanovPatchwiseStatelessAllPacked(
     int           targetDevice,
     int           numberOfCells,
     PackedDouble**      mappedPointersToQInPacked,
@@ -53,7 +38,6 @@ namespace exahype2::fv::rusanov::omp::internal {
     const TempDataEnumeratorType                 fluxEnumerator(numberOfCells, NumberOfVolumesPerAxisInPatch, HaloSize, NumberOfUnknowns, 0);
     const TempDataEnumeratorType                 ncpEnumerator(numberOfCells, NumberOfVolumesPerAxisInPatch + 1, HaloSize, NumberOfUnknowns, 0);
     const TempDataEnumeratorType                 eigenvalueEnumerator(numberOfCells, NumberOfVolumesPerAxisInPatch, HaloSize, 1, 0);
-
 
     // alloc buffers 
     double** mappedPointersToQIn = new double*[numberOfCells];
@@ -91,19 +75,44 @@ namespace exahype2::fv::rusanov::omp::internal {
     double*  maxEigenvalue = (double*)omp_target_alloc(numberOfCells * sizeof(double), targetDevice);
     double** mappedPointersToQOut = new double*[numberOfCells];
     for (int i = 0; i < numberOfCells; ++i) {
-        mappedPointersToQOut[i] = (double*)omp_target_alloc(numberOfCells * sizeof(double*), targetDevice);
+        mappedPointersToQOut[i] = (double*)omp_target_alloc(QOutEnumerator.size() * sizeof(double), targetDevice);
     }
 #pragma omp target enter data map(to: mappedPointersToQOut[0: numberOfCells])
 
-    
-
-    // ====================================================
-    // Copy solution over and evaluate source (if required)
-    // ====================================================
-    if constexpr (EvaluateSource) {
+    #pragma omp target teams is_device_ptr(rawPointerToCellSize, rawPointerToCellCentre, t, dt) device(targetDevice)
+    {
+        // ====================== convert to double
+        // #pragma omp distribute parallel for simd collapse(2)
+        // for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
+        //     for (int i = 0; i < QInEnumerator.size(); ++i) {
+        //         mappedPointersToQIn[patchIndex][i] = mappedPointersToQInPacked[patchIndex][i]._d;
+        //     }
+        // }
+        // #pragma omp distribute parallel for simd
+        // for (int i = 0; i < Dimensions * numberOfCells; ++i) {
+        //     rawPointerToCellCentre[i] = rawPointerToCellCentrePacked[i];
+        //     rawPointerToCellSize[i] = rawPointerToCellSizePacked[i];
+        // }
+        // #pragma omp distribute parallel for simd 
+        // for (int i = 0; i < numberOfCells; ++i) {
+        //     t[i] = tPacked[i];
+        //     dt[i] = dtPacked[i];
+        // }
+        // debug
+        // #pragma omp distribute paralllel for simd
+        // for (int i = 0; i < 1; ++i) {
+        //     for (int j = 0; j < 5; ++j)
+        //         std::printf("%f\n", mappedPointersToQIn[i][j]);
+        //     std::printf("\n");
+        // }
+#pragma omp distribute 
+    for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+      // ====================================================
+      // Copy solution over and evaluate source (if required)
+      // ====================================================
+      if constexpr (EvaluateSource) {
 #if Dimensions == 2
-#pragma omp target teams distribute parallel for simd collapse(3) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(2)
         for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
           for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
             loopbodies::copySolutionAndAddSourceTerm<SolverType>(
@@ -120,10 +129,8 @@ namespace exahype2::fv::rusanov::omp::internal {
             );
           }
         }
-      }
 #else
-#pragma omp target teams distribute parallel for simd collapse(4) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(3)
         for (int z = 0; z < NumberOfVolumesPerAxisInPatch; z++) {
           for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
             for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
@@ -142,12 +149,10 @@ namespace exahype2::fv::rusanov::omp::internal {
             }
           }
         }
-      }
 #endif
-    } else {
+      } else {
 #if Dimensions == 2
-#pragma omp target teams distribute parallel for simd collapse(4) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(3)
         for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
           for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
             for (int unknown = 0; unknown < NumberOfUnknowns + NumberOfAuxiliaryVariables; unknown++) {
@@ -155,10 +160,8 @@ namespace exahype2::fv::rusanov::omp::internal {
             }
           }
         }
-      }
 #else
-#pragma omp target teams distribute parallel for simd collapse(5) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(4)
         for (int z = 0; z < NumberOfVolumesPerAxisInPatch; z++) {
           for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
             for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
@@ -170,16 +173,14 @@ namespace exahype2::fv::rusanov::omp::internal {
             }
           }
         }
-      }
 #endif
-    }
+      }
 
-    // ====================================================
-    // Compute damping due to max eigenvalue
-    // ====================================================
+      // ====================================================
+      // Compute damping due to max eigenvalue
+      // ====================================================
 #if Dimensions == 2
-#pragma omp target teams distribute parallel for simd collapse(3) device(targetDevice) // nowait
-    for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(2)
       for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
         for (int x = 0; x < NumberOfVolumesPerAxisInPatch + 2 * HaloSize; x++) {
           loopbodies::computeMaxEigenvalue<SolverType>(
@@ -197,10 +198,8 @@ namespace exahype2::fv::rusanov::omp::internal {
           );
         }
       }
-    }
 
-#pragma omp target teams distribute parallel for simd collapse(3) device(targetDevice) // nowait
-    for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(2)
       for (int y = 0; y < NumberOfVolumesPerAxisInPatch + 2 * HaloSize; y++) {
         for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
           loopbodies::computeMaxEigenvalue<SolverType>(
@@ -218,10 +217,8 @@ namespace exahype2::fv::rusanov::omp::internal {
           );
         }
       }
-    }
 
-#pragma omp target teams distribute parallel for simd collapse(4) device(targetDevice) // nowait
-    for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(3)
       for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
         for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
           for (int unknown = 0; unknown < NumberOfUnknowns; unknown++) {
@@ -244,10 +241,8 @@ namespace exahype2::fv::rusanov::omp::internal {
           }
         }
       }
-    }
 #else
-#pragma omp target teams distribute parallel for simd collapse(4) device(targetDevice) // nowait
-    for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(3)
       for (int z = 0; z < NumberOfVolumesPerAxisInPatch; z++) {
         for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
           for (int x = 0; x < NumberOfVolumesPerAxisInPatch + 2 * HaloSize; x++) {
@@ -267,10 +262,8 @@ namespace exahype2::fv::rusanov::omp::internal {
           }
         }
       }
-    }
 
-#pragma omp target teams distribute parallel for simd collapse(4) device(targetDevice) // nowait
-    for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(3)
       for (int z = 0; z < NumberOfVolumesPerAxisInPatch; z++) {
         for (int y = 0; y < NumberOfVolumesPerAxisInPatch + 2 * HaloSize; y++) {
           for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
@@ -290,10 +283,8 @@ namespace exahype2::fv::rusanov::omp::internal {
           }
         }
       }
-    }
 
-#pragma omp target teams distribute parallel for simd collapse(4) device(targetDevice) // nowait
-    for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(3)
       for (int z = 0; z < NumberOfVolumesPerAxisInPatch + 2 * HaloSize; z++) {
         for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
           for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
@@ -313,10 +304,8 @@ namespace exahype2::fv::rusanov::omp::internal {
           }
         }
       }
-    }
 
-#pragma omp target teams distribute parallel for simd collapse(5) device(targetDevice) // nowait
-    for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(4)
       for (int z = 0; z < NumberOfVolumesPerAxisInPatch; z++) {
         for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
           for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
@@ -341,16 +330,15 @@ namespace exahype2::fv::rusanov::omp::internal {
           }
         }
       }
-    }
 #endif
 
-    // ====================================================
-    // Normal (conservative) flux
-    // ====================================================
-    if constexpr (EvaluateFlux) {
+
+      // ====================================================
+      // Normal (conservative) flux
+      // ====================================================
+      if constexpr (EvaluateFlux) {
 #if Dimensions == 2
-#pragma omp target teams distribute parallel for simd collapse(3) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(2)
         for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
           for (int x = 0; x < NumberOfVolumesPerAxisInPatch + 2 * HaloSize; x++) {
             loopbodies::computeFlux<SolverType>(
@@ -368,10 +356,8 @@ namespace exahype2::fv::rusanov::omp::internal {
             );
           }
         }
-      }
 
-#pragma omp target teams distribute parallel for simd collapse(3) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(2)
         for (int y = 0; y < NumberOfVolumesPerAxisInPatch + 2 * HaloSize; y++) {
           for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
             loopbodies::computeFlux<SolverType>(
@@ -389,10 +375,8 @@ namespace exahype2::fv::rusanov::omp::internal {
             );
           }
         }
-      }
 
-#pragma omp target teams distribute parallel for simd collapse(4) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(3)
         for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
           for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
             for (int unknown = 0; unknown < NumberOfUnknowns; unknown++) {
@@ -413,10 +397,8 @@ namespace exahype2::fv::rusanov::omp::internal {
             }
           }
         }
-      }
 #else
-#pragma omp target teams distribute parallel for simd collapse(4) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(3)
         for (int z = 0; z < NumberOfVolumesPerAxisInPatch; z++) {
           for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
             for (int x = 0; x < NumberOfVolumesPerAxisInPatch + 2 * HaloSize; x++) {
@@ -436,10 +418,8 @@ namespace exahype2::fv::rusanov::omp::internal {
             }
           }
         }
-      }
 
-#pragma omp target teams distribute parallel for simd collapse(4) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(3)
         for (int z = 0; z < NumberOfVolumesPerAxisInPatch; z++) {
           for (int y = 0; y < NumberOfVolumesPerAxisInPatch + 2 * HaloSize; y++) {
             for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
@@ -459,10 +439,8 @@ namespace exahype2::fv::rusanov::omp::internal {
             }
           }
         }
-      }
 
-#pragma omp target teams distribute parallel for simd collapse(4) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(3)
         for (int z = 0; z < NumberOfVolumesPerAxisInPatch + 2 * HaloSize; z++) {
           for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
             for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
@@ -482,10 +460,8 @@ namespace exahype2::fv::rusanov::omp::internal {
             }
           }
         }
-      }
 
-#pragma omp target teams distribute parallel for simd collapse(5) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(4)
         for (int z = 0; z < NumberOfVolumesPerAxisInPatch; z++) {
           for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
             for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
@@ -508,14 +484,12 @@ namespace exahype2::fv::rusanov::omp::internal {
             }
           }
         }
-      }
 #endif
-    }
+      }
 
-    if constexpr (EvaluateNonconservativeProduct) {
+      if constexpr (EvaluateNonconservativeProduct) {
 #if Dimensions == 2
-#pragma omp target teams distribute parallel for simd collapse(3) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(2)
         for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
           for (int x = 0; x < NumberOfVolumesPerAxisInPatch + 2 * HaloSize - 1; x++) {
             loopbodies::computeNonconservativeFlux<SolverType>(
@@ -533,10 +507,8 @@ namespace exahype2::fv::rusanov::omp::internal {
             );
           }
         }
-      }
 
-#pragma omp target teams distribute parallel for simd collapse(3) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(2)
         for (int y = 0; y < NumberOfVolumesPerAxisInPatch + 2 * HaloSize - 1; y++) {
           for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
             loopbodies::computeNonconservativeFlux<SolverType>(
@@ -554,10 +526,8 @@ namespace exahype2::fv::rusanov::omp::internal {
             );
           }
         }
-      }
 
-#pragma omp target teams distribute parallel for simd collapse(4) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(3)
         for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
           for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
             for (int unknown = 0; unknown < NumberOfUnknowns; unknown++) {
@@ -578,10 +548,8 @@ namespace exahype2::fv::rusanov::omp::internal {
             }
           }
         }
-      }
 #else
-#pragma omp target teams distribute parallel for simd collapse(4) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(3)
         for (int z = 0; z < NumberOfVolumesPerAxisInPatch; z++) {
           for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
             for (int x = 0; x < NumberOfVolumesPerAxisInPatch + 2 * HaloSize - 1; x++) {
@@ -601,10 +569,8 @@ namespace exahype2::fv::rusanov::omp::internal {
             }
           }
         }
-      }
 
-#pragma omp target teams distribute parallel for simd collapse(4) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(3)
         for (int z = 0; z < NumberOfVolumesPerAxisInPatch; z++) {
           for (int y = 0; y < NumberOfVolumesPerAxisInPatch + 2 * HaloSize - 1; y++) {
             for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
@@ -624,10 +590,8 @@ namespace exahype2::fv::rusanov::omp::internal {
             }
           }
         }
-      }
 
-#pragma omp target teams distribute parallel for simd collapse(4) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(3)
         for (int z = 0; z < NumberOfVolumesPerAxisInPatch + 2 * HaloSize - 1; z++) {
           for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
             for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
@@ -647,10 +611,8 @@ namespace exahype2::fv::rusanov::omp::internal {
             }
           }
         }
-      }
 
-#pragma omp target teams distribute parallel for simd collapse(5) device(targetDevice) // nowait
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+#pragma omp parallel for simd collapse(4)
         for (int z = 0; z < NumberOfVolumesPerAxisInPatch; z++) {
           for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
             for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
@@ -673,15 +635,12 @@ namespace exahype2::fv::rusanov::omp::internal {
             }
           }
         }
-      }
 #endif
-    }
+      }
 
-    if constexpr (EvaluateMaximumEigenvalueAfterTimeStep) {
-#if Dimensions == 2
-#pragma omp target teams distribute device(targetDevice)
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
+      if constexpr (EvaluateMaximumEigenvalueAfterTimeStep) {
         double newMaxEigenvalue = 0.0;
+#if Dimensions == 2
 #pragma omp parallel for simd collapse(2) reduction(max : newMaxEigenvalue)
         for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
           for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
@@ -700,13 +659,8 @@ namespace exahype2::fv::rusanov::omp::internal {
             );
           }
         }
-        maxEigenvalue[patchIndex] = newMaxEigenvalue;
-      }
 #else
-#pragma omp target teams distribute device(targetDevice)
-      for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
-        double newMaxEigenvalue = 0.0;
-#pragma omp parallel for simd       collapse(3) reduction(max : newMaxEigenvalue)
+#pragma omp parallel for simd collapse(3) reduction(max : newMaxEigenvalue)
         for (int z = 0; z < NumberOfVolumesPerAxisInPatch; z++) {
           for (int y = 0; y < NumberOfVolumesPerAxisInPatch; y++) {
             for (int x = 0; x < NumberOfVolumesPerAxisInPatch; x++) {
@@ -726,14 +680,12 @@ namespace exahype2::fv::rusanov::omp::internal {
             }
           }
         }
+#endif
         maxEigenvalue[patchIndex] = newMaxEigenvalue;
       }
-#endif
     }
-    
-    // convert to PackedDouble
-    #pragma omp target teams
-    {
+
+        // convert to PackedDouble
         #pragma omp distribute parallel for simd collapse(2)
         for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
             for (int i = 0; i < QOutEnumerator.size(); ++i) {
@@ -745,6 +697,10 @@ namespace exahype2::fv::rusanov::omp::internal {
             maxEigenvaluePacked[patchIndex]._d = maxEigenvalue[patchIndex];
         }
     }
+
+    // #pragma omp target teams
+    // {
+    // }
     
     // release buffers
     #pragma omp target exit data map(delete: mappedPointersToQIn[0: numberOfCells])
@@ -764,13 +720,13 @@ namespace exahype2::fv::rusanov::omp::internal {
 
     delete[] mappedPointersToQIn;
     delete[] mappedPointersToQOut;
-    
+
+
   }
-  
 } // namespace exahype2::fv::rusanov::omp::internal
 
 
-
+ 
 template <
   class SolverType,
   int  NumberOfVolumesPerAxisInPatch,
@@ -782,7 +738,7 @@ template <
   bool EvaluateSource,
   bool EvaluateMaximumEigenvalueAfterTimeStep,
   class TempDataEnumeratorType>
-void exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStatelessPacked(int targetDevice, CellData& patchData, tarch::timing::Measurement& measurement) {
+void exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessAllPacked(int targetDevice, CellData& patchData) {
     const enumerator::AoSLexicographicEnumerator QInEnumerator(1, NumberOfVolumesPerAxisInPatch, HaloSize, NumberOfUnknowns, NumberOfAuxiliaryVariables);
     const enumerator::AoSLexicographicEnumerator QOutEnumerator(1, NumberOfVolumesPerAxisInPatch, 0, NumberOfUnknowns, NumberOfAuxiliaryVariables);
     const TempDataEnumeratorType                 fluxEnumerator(patchData.numberOfCells, NumberOfVolumesPerAxisInPatch, HaloSize, NumberOfUnknowns, 0);
@@ -813,8 +769,8 @@ void exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStatelessPacked(i
     // ========================= Compress data 
     const int numberOfCells = patchData.numberOfCells;
     // still do not know if there is a problem here to convert to void**
-    PackedDouble** QInPacked = (PackedDouble**)(void**)new PackedDouble*[numberOfCells];
-    PackedDouble** QOutPacked = (PackedDouble**)(void**)new PackedDouble*[numberOfCells];
+    PackedDouble** QInPacked = (PackedDouble**)(new PackedDouble*[numberOfCells]);
+    PackedDouble** QOutPacked = (PackedDouble**)(new PackedDouble*[numberOfCells]);
 
     for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
         const double* currentQIn = patchData.QIn[patchIndex];
@@ -899,7 +855,7 @@ void exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStatelessPacked(i
 // #pragma omp target enter data map(to: mappedPointersToQOut[0: numberOfCells])
 
 
-    internal::timeStepWithRusanovBatchedStatelessPacked<
+    internal::timeStepWithRusanovPatchwiseStatelessAllPacked<
       SolverType,
       NumberOfVolumesPerAxisInPatch,
       HaloSize,
@@ -1018,7 +974,4 @@ void exahype2::fv::rusanov::omp::timeStepWithRusanovBatchedHeapStatelessPacked(i
     delete[] tempEigenvalueZ;
   }
 
-
 }
-
-

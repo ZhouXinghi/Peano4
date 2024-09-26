@@ -13,8 +13,8 @@ build_modes = {
     "Stats": peano4.output.CompileMode.Stats,
     "Debug": peano4.output.CompileMode.Debug,
 }
-# build_mode = "Release"
-build_mode = "Debug"
+build_mode = "Release"
+# build_mode = "Debug"
 
 parser = argparse.ArgumentParser(
     description="ExaHyPE 2 - Finite Volumes Rusanov Kernel Benchmarking Script"
@@ -179,58 +179,58 @@ my_solver.add_user_solver_includes(
 
 my_project.add_solver(my_solver)
 
-my_project.set_global_simulation_parameters(
-    dimensions=args.dim,
-    size=[1.0, 1.0, 1.0][0 : args.dim],
-    offset=[0.0, 0.0, 0.0][0 : args.dim],
-    min_end_time=0.1,
-    max_end_time=0.1,
-    first_plot_time_stamp=0.0,
-    time_in_between_plots=0.0,
-    periodic_BC=[False, False, False],
-)
+# my_project.set_global_simulation_parameters(
+#     dimensions=args.dim,
+#     size=[1.0, 1.0, 1.0][0 : args.dim],
+#     offset=[0.0, 0.0, 0.0][0 : args.dim],
+#     min_end_time=0.1,
+#     max_end_time=0.1,
+#     first_plot_time_stamp=0.0,
+#     time_in_between_plots=0.0,
+#     periodic_BC=[False, False, False],
+# )
 
 my_project.set_Peano4_installation("../../../../", mode=build_modes[args.build_mode])
 my_project = my_project.generate_Peano4_project(verbose=True)
 
-my_project.output.makefile.add_cpp_file("KernelBenchmarksFVRusanov-main.cpp")
+# my_project.output.makefile.add_cpp_file("KernelBenchmarksFVRusanov-main.cpp")
 
-my_project.constants.export_constexpr_with_type("Accuracy", str(accuracy), "double")
-my_project.constants.export_constexpr_with_type(
-    "NumberOfSamples", str(args.samples), "int"
-)
+# my_project.constants.export_constexpr_with_type("Accuracy", str(accuracy), "double")
+# my_project.constants.export_constexpr_with_type(
+#     "NumberOfSamples", str(args.samples), "int"
+# )
 formatted_num_patches = "{{{}}}".format(", ".join(str(val) for val in args.num_patches))
-my_project.constants.export_const_with_type(
-    "NumberOfPatchesToStudy",
-    str(formatted_num_patches),
-    "::tarch::la::Vector<%s, int>" % len(args.num_patches),
-)
-my_project.constants.export_constexpr_with_type(
-    "NumberOfLaunchingThreads", str(args.num_threads), "int"
-)
+# my_project.constants.export_const_with_type(
+#     "NumberOfPatchesToStudy",
+#     str(formatted_num_patches),
+#     "::tarch::la::Vector<%s, int>" % len(args.num_patches),
+# )
+# my_project.constants.export_constexpr_with_type(
+#     "NumberOfLaunchingThreads", str(args.num_threads), "int"
+# )
 
-if args.enable_fpe:
-    my_project.constants.export_boolean("EnableFPE", True)
-else:
-    my_project.constants.export_boolean("EnableFPE", False)
+# if args.enable_fpe:
+#     my_project.constants.export_boolean("EnableFPE", True)
+# else:
+#     my_project.constants.export_boolean("EnableFPE", False)
 
-my_project.constants.export_boolean("EvaluateFlux", True)
-my_project.constants.export_boolean("EvaluateNonconservativeProduct", False)
-my_project.constants.export_boolean("EvaluateSource", False)
-my_project.constants.export_boolean(
-    "EvaluateMaximumEigenvalueAfterTimeStep", True if args.eval_eig else False
-)  # Reduction
+# my_project.constants.export_boolean("EvaluateFlux", True)
+# my_project.constants.export_boolean("EvaluateNonconservativeProduct", False)
+# my_project.constants.export_boolean("EvaluateSource", False)
+# my_project.constants.export_boolean(
+#     "EvaluateMaximumEigenvalueAfterTimeStep", True if args.eval_eig else False
+# )  # Reduction
 
-if args.eval_cpu == False and args.eval_gpu == False:
-    my_project.constants.export_boolean("EvaluateHostKernels", True)
-    my_project.constants.export_boolean("EvaluateDeviceKernels", True)
-else:
-    my_project.constants.export_boolean(
-        "EvaluateHostKernels", True if args.eval_cpu else False
-    )
-    my_project.constants.export_boolean(
-        "EvaluateDeviceKernels", True if args.eval_gpu else False
-    )
+# if args.eval_cpu == False and args.eval_gpu == False:
+#     my_project.constants.export_boolean("EvaluateHostKernels", True)
+#     my_project.constants.export_boolean("EvaluateDeviceKernels", True)
+# else:
+#     my_project.constants.export_boolean(
+#         "EvaluateHostKernels", True if args.eval_cpu else False
+#     )
+#     my_project.constants.export_boolean(
+#         "EvaluateDeviceKernels", True if args.eval_gpu else False
+#     )
 
 my_project.constants.define_value("GAMMA", str(1.0))
 
@@ -238,7 +238,7 @@ my_project.build(
     make=not args.no_make, make_clean_first=True, throw_away_data_after_build=True
 )
 
-print("Executable is ", executable_name)
+# print("Executable is ", executable_name)
 print("Clean object files via 'make clean'")
 print("Recompile the generated code via 'make -j'")
 print("Remove all generated code via 'make distclean'")

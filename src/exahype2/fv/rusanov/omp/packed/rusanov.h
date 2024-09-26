@@ -34,6 +34,20 @@ namespace exahype2::fv::rusanov::omp {
         class TempDataEnumeratorType>
       KeywordToAvoidDuplicateSymbolsForInlinedFunctions void timeStepWithRusanovPatchwiseHeapStatelessPacked(int targetDevice, CellData& patchData) InlineMethod;
 
+
+      template <
+        class SolverType,
+        int  NumberOfVolumesPerAxisInPatch,
+        int  HaloSize,
+        int  NumberOfUnknowns,
+        int  NumberOfAuxiliaryVariables,
+        bool EvaluateFlux,
+        bool EvaluateNonconservativeProduct,
+        bool EvaluateSource,
+        bool EvaluateMaximumEigenvalueAfterTimeStep,
+        class TempDataEnumeratorType>
+      KeywordToAvoidDuplicateSymbolsForInlinedFunctions void timeStepWithRusanovPatchwiseHeapStatelessAllPacked(int targetDevice, CellData& patchData) InlineMethod;
+
 }// namespace exahype2::fv::rusanov::omp
  
 namespace exahype2::fv::rusanov::omp {
@@ -70,3 +84,4 @@ namespace exahype2::fv::rusanov::omp {
 #include "KernelTest.cpph"
 #include "BatchedStatelessPacked.cpph"
 #include "PatchwiseStatelessPacked.cpph"
+#include "PatchwiseStatelessAllPacked.cpph"

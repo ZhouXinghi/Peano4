@@ -13,8 +13,8 @@ build_modes = {
     "Stats": peano4.output.CompileMode.Stats,
     "Debug": peano4.output.CompileMode.Debug,
 }
-# build_mode = "Release"
-build_mode = "Debug"
+build_mode = "Release"
+# build_mode = "Debug"
 
 parser = argparse.ArgumentParser(
     description="ExaHyPE 2 - Finite Volumes Rusanov Kernel Benchmarking Script"
@@ -235,7 +235,7 @@ else:
 my_project.constants.define_value("GAMMA", str(1.0))
 
 my_project.build(
-    make=not args.no_make, make_clean_first=True, throw_away_data_after_build=True
+    make=False, make_clean_first=True, throw_away_data_after_build=True
 )
 
 print("Executable is ", executable_name)

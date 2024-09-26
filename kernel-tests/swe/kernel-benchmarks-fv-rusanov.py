@@ -13,8 +13,8 @@ build_modes = {
     "Stats": peano4.output.CompileMode.Stats,
     "Debug": peano4.output.CompileMode.Debug,
 }
-# build_mode = "Release"
-build_mode = "Debug"
+build_mode = "Release"
+# build_mode = "Debug"
 
 parser = argparse.ArgumentParser(
     description="ExaHyPE 2 - Finite Volumes Rusanov Kernel Benchmarking Script"
@@ -151,8 +151,8 @@ my_solver = exahype2.solvers.fv.rusanov.GlobalAdaptiveTimeStepWithEnclaveTasking
     name="FVRusanovSolver",
     patch_size=args.patch_size,
     # unknowns={"rho": 1, "v": args.dim, "e": 1},
-    unknowns=args.dim + 2,
-    auxiliary_variables=0,
+    unknowns=args.dim + 1,
+    auxiliary_variables=1,
     min_volume_h=0.001,  # max_cell_size -> arbitrary value
     max_volume_h=0.001,  # min_cell_size -> arbitrary value
     time_step_relaxation=0.5,
@@ -160,20 +160,24 @@ my_solver = exahype2.solvers.fv.rusanov.GlobalAdaptiveTimeStepWithEnclaveTasking
 )
 
 my_solver.set_implementation(
-    initial_conditions="",
-    boundary_conditions=exahype2.solvers.PDETerms.Empty_Implementation,
-    flux="::applications::exahype2::euler::flux(Q, normal, F);",
-    eigenvalues="return ::applications::exahype2::euler::maxEigenvalue(Q, normal);",
-    refinement_criterion=exahype2.solvers.PDETerms.Empty_Implementation,
-    # There is a bug in the code generator: When set to 'None_Implementation', an offloadable function is still generated, also 'Empty_Implementation' does not work.
-    # TODO: What is the difference between 'None_Implementation' and 'Empty_Implementation'?
-    source_term="",
-    ncp="",
+        initial_conditions="",
+        boundary_conditions=exahype2.solvers.PDETerms.Empty_Implementation,
+        refinement_criterion=exahype2.solvers.PDETerms.Empty_Implementation,
+        flux="::applications::exahype2::swe::flux(Q, faceCentre, volumeH, t, dt, normal, F);",
+        ncp="::applications::exahype2::swe::nonconservativeProduct(Q, deltaQ, faceCentre, volumeH, t, dt, normal, BTimesDeltaQ);",
+        eigenvalues="""
+  double L[3]{0.0};
+  eigenvalues(Q, faceCentre, volumeH, t, dt, normal, L);
+  return std::max({std::abs(L[0]), std::abs(L[1]), std::abs(L[2])});
+""",
+        # There is a bug in the code generator: When set to 'None_Implementation', an offloadable function is still generated, also 'Empty_Implementation' does not work.
+        # TODO: What is the difference between 'None_Implementation' and 'Empty_Implementation'?
+        source_term="",
 )
 
 my_solver.add_user_solver_includes(
     """
-#include "../../../../applications/exahype2/euler/EulerKernels.h"
+#include "../../applications/exahype2/swe/SWE.h"
 """
 )
 
@@ -193,7 +197,7 @@ my_project.set_global_simulation_parameters(
 my_project.set_Peano4_installation("../../../../", mode=build_modes[args.build_mode])
 my_project = my_project.generate_Peano4_project(verbose=True)
 
-my_project.output.makefile.add_cpp_file("KernelBenchmarksFVRusanov-main.cpp")
+# my_project.output.makefile.add_cpp_file("KernelBenchmarksFVRusanov-main.cpp")
 
 my_project.constants.export_constexpr_with_type("Accuracy", str(accuracy), "double")
 my_project.constants.export_constexpr_with_type(
@@ -234,8 +238,26 @@ else:
 
 my_project.constants.define_value("GAMMA", str(1.0))
 
+os.system(
+    "cp {} KernelBenchmarksFVRusanov-main.cpp".format(
+        "../KernelBenchmarksFVRusanov-main.cpp"
+    )
+)
+
+os.system(
+    "cp {} CMakeLists.txt".format(
+        "../CMakeLists.txt"
+    )
+)
+
+os.system(
+    "cp {} cmake.sh".format(
+        "../cmake.sh"
+    )
+)
+
 my_project.build(
-    make=not args.no_make, make_clean_first=True, throw_away_data_after_build=True
+    make=False, make_clean_first=True, throw_away_data_after_build=True
 )
 
 print("Executable is ", executable_name)

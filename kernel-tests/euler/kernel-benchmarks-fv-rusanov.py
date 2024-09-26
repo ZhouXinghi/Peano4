@@ -13,8 +13,8 @@ build_modes = {
     "Stats": peano4.output.CompileMode.Stats,
     "Debug": peano4.output.CompileMode.Debug,
 }
-# build_mode = "Release"
-build_mode = "Debug"
+build_mode = "Release"
+# build_mode = "Debug"
 
 parser = argparse.ArgumentParser(
     description="ExaHyPE 2 - Finite Volumes Rusanov Kernel Benchmarking Script"
@@ -173,7 +173,7 @@ my_solver.set_implementation(
 
 my_solver.add_user_solver_includes(
     """
-#include "../../../../applications/exahype2/euler/EulerKernels.h"
+#include "../../applications/exahype2/euler/EulerKernels.h"
 """
 )
 
@@ -234,8 +234,26 @@ else:
 
 my_project.constants.define_value("GAMMA", str(1.0))
 
+os.system(
+    "cp {} KernelBenchmarksFVRusanov-main.cpp".format(
+        "../KernelBenchmarksFVRusanov-main.cpp"
+    )
+)
+
+os.system(
+    "cp {} CMakeLists.txt".format(
+        "../CMakeLists.txt"
+    )
+)
+
+os.system(
+    "cp {} cmake.sh".format(
+        "../cmake.sh"
+    )
+)
+
 my_project.build(
-    make=not args.no_make, make_clean_first=True, throw_away_data_after_build=True
+    make=False, make_clean_first=True, throw_away_data_after_build=True
 )
 
 print("Executable is ", executable_name)

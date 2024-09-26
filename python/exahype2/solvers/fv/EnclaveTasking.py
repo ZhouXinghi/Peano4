@@ -787,6 +787,11 @@ class EnclaveTasking(FV):
             namespace, output, dimensions
         )
 
+        # print("Test Zhou")
+
+        # raise AssertionError("Error!")
+        # raise AssertionError(self._fused_compute_kernel_call_stateless_gpu)
+
         templatefile_prefix = os.path.join(
             os.path.dirname(os.path.realpath(__file__)),
             "EnclaveTasking.EnclaveTask.template",
