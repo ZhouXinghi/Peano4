@@ -5,6 +5,27 @@ import sys
 import argparse
 import peano4
 import exahype2
+import shutil
+
+
+# os.system(
+#     "make clean && make distclean"
+# )
+
+def modify_cmake_file(dimension):
+    # 复制模板文件
+    shutil.copy('../CMakeLists.txt', f'CMakeLists.txt')
+
+    # 修改文件内容
+    with open(f'CMakeLists.txt', 'r') as file:
+        content = file.read()
+
+    # 替换dimension相关的内容
+    modified_content = content.replace('{{DIMENSION}}', str(dimension))
+
+    # 保存修改后的文件
+    with open(f'CMakeLists.txt', 'w') as file:
+        file.write(modified_content)
 
 build_modes = {
     "Release": peano4.output.CompileMode.Release,
@@ -199,6 +220,10 @@ my_project.constants.export_constexpr_with_type("Accuracy", str(accuracy), "doub
 my_project.constants.export_constexpr_with_type(
     "NumberOfSamples", str(args.samples), "int"
 )
+
+# for dimension 3, 2048 is too large
+# if args.dim == 3:
+#     args.num_patches = args.num_patches[0 : len(args.num_patches) - 1]
 formatted_num_patches = "{{{}}}".format(", ".join(str(val) for val in args.num_patches))
 my_project.constants.export_const_with_type(
     "NumberOfPatchesToStudy",
@@ -240,11 +265,13 @@ os.system(
     )
 )
 
-os.system(
-    "cp {} CMakeLists.txt".format(
-        "../CMakeLists.txt"
-    )
-)
+modify_cmake_file(args.dim);
+
+# os.system(
+#     "cp {} CMakeLists.txt".format(
+#         "../CMakeLists.txt"
+#     )
+# )
 
 os.system(
     "cp {} cmake.sh".format(

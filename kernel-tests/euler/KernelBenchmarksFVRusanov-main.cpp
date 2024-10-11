@@ -45,6 +45,11 @@ void initInputData(double* Q) {
 
 int main(int argc, char** argv)
 {
+    ::exahype2::fv::rusanov::omp::PackedDouble d(0.1);
+    std::cout << sizeof(d) << std::endl;
+    d.printInfo();
+
+    constexpr int repeat = 20;
     //std::printf("%d\n", NumberOfInputEntries);
     //int result = ::peano4::initParallelEnvironment(&argc, &argv);
     //std::cout << result << std::endl;
@@ -55,7 +60,7 @@ int main(int argc, char** argv)
     for (int p = 0; p < NumberOfPatchesToStudy.size(); ++p) {
         int patches = NumberOfPatchesToStudy[p];
 
-        std::printf("========Patches = %d\n\n", patches);
+        std::printf("========Patches = %d\n", patches);
 
         // int patches = 512;
         int device = 0;
@@ -92,27 +97,26 @@ int main(int argc, char** argv)
             }
         };
 
-        constexpr int repeat = 10;
 
-        initPatchData();
-        TICK(cpu)
-        for (int i = 0; i < repeat; ++i) {
-            ::exahype2::fv::rusanov::timeStepWithRusanovPatchwiseHeapStateless<
-                FVRusanovSolver,
-                FVRusanovSolver::NumberOfFiniteVolumesPerAxisPerPatch,
-                HaloSize,
-                FVRusanovSolver::NumberOfUnknowns,
-                FVRusanovSolver::NumberOfAuxiliaryVariables,
-                true, //EvaluateFlux,
-                false, //EvaluateNonconservativeProduct,
-                false, //EvaluateSource,
-                true, //EvaluateMaximumEigenvalueAfterTimeStep,
-                ::exahype2::enumerator::AoSLexicographicEnumerator>
-                (patchData);
-        }
-        TOCK(cpu)
-        printPatch();
-        freePatchData();
+        // initPatchData();
+        // TICK(CPU)
+        // for (int i = 0; i < repeat; ++i) {
+        //     ::exahype2::fv::rusanov::timeStepWithRusanovPatchwiseHeapStateless<
+        //         FVRusanovSolver,
+        //         FVRusanovSolver::NumberOfFiniteVolumesPerAxisPerPatch,
+        //         HaloSize,
+        //         FVRusanovSolver::NumberOfUnknowns,
+        //         FVRusanovSolver::NumberOfAuxiliaryVariables,
+        //         true, //EvaluateFlux,
+        //         false, //EvaluateNonconservativeProduct,
+        //         false, //EvaluateSource,
+        //         true, //EvaluateMaximumEigenvalueAfterTimeStep,
+        //         ::exahype2::enumerator::AoSLexicographicEnumerator>
+        //         (patchData);
+        // }
+        // TOCK(CPU)
+        // // printPatch();
+        // freePatchData();
 
 
         initPatchData();
@@ -129,34 +133,34 @@ int main(int argc, char** argv)
                 false, //EvaluateSource,
                 true, //EvaluateMaximumEigenvalueAfterTimeStep,
                 ::exahype2::enumerator::AoSLexicographicEnumerator>
-                (device, patchData, timingComputeKernel);
+                (device, patchData);
         }
         TOCK(timeStepWithRusanovPatchwiseHeapStateless)
         printPatch();
         freePatchData();
 
-        initPatchData();
-        TICK(PatchWiseGPUPacked)
-        for (int i = 0; i < repeat; ++i) {
-            ::exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessPacked<
-                FVRusanovSolver,
-                FVRusanovSolver::NumberOfFiniteVolumesPerAxisPerPatch,
-                HaloSize,
-                FVRusanovSolver::NumberOfUnknowns,
-                FVRusanovSolver::NumberOfAuxiliaryVariables,
-                true, //EvaluateFlux,
-                false, //EvaluateNonconservativeProduct,
-                false, //EvaluateSource,
-                true, //EvaluateMaximumEigenvalueAfterTimeStep,
-                ::exahype2::enumerator::AoSLexicographicEnumerator
-                //::exahype2::enumerator::SoALexicographicEnumerator
-                >
-                (device, patchData);
-                // (device, patchData, timingComputeKernel);
-        }
-        TOCK(PatchWiseGPUPacked)
-        printPatch();
-        freePatchData();
+        // initPatchData();
+        // TICK(PatchWiseGPUPacked)
+        // for (int i = 0; i < repeat; ++i) {
+        //     ::exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessPacked<
+        //         FVRusanovSolver,
+        //         FVRusanovSolver::NumberOfFiniteVolumesPerAxisPerPatch,
+        //         HaloSize,
+        //         FVRusanovSolver::NumberOfUnknowns,
+        //         FVRusanovSolver::NumberOfAuxiliaryVariables,
+        //         true, //EvaluateFlux,
+        //         false, //EvaluateNonconservativeProduct,
+        //         false, //EvaluateSource,
+        //         true, //EvaluateMaximumEigenvalueAfterTimeStep,
+        //         ::exahype2::enumerator::AoSLexicographicEnumerator
+        //         //::exahype2::enumerator::SoALexicographicEnumerator
+        //         >
+        //         (device, patchData);
+        //         // (device, patchData, timingComputeKernel);
+        // }
+        // TOCK(PatchWiseGPUPacked)
+        // // printPatch();
+        // freePatchData();
 
 
         initPatchData();
@@ -181,6 +185,8 @@ int main(int argc, char** argv)
         TOCK(PatchWiseGPUAllPacked)
         printPatch();
         freePatchData();
+
+        printf("\n");
     }
 
     //::exahype2::fv::rusanov::omp::KernelTest();

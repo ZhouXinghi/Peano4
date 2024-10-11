@@ -53,7 +53,19 @@ namespace exahype2::fv::rusanov::omp {
 namespace exahype2::fv::rusanov::omp {
     class PackedDouble {
     public:
-        [[clang::truncate_mantissa(20)]]
+#ifdef USE_HPC_EXT
+        void printInfo()
+        {
+            std::printf("Using hpc-ext, mantissa == 32");
+        }
+        [[clang::truncate_mantissa(32)]] // using hpc-ext
+#elif defined(USE_SOURCE_TO_SOURCE_TRANSFORM)
+        void printInfo()
+        {
+            std::printf("Using source-to-source-transform, mantissa == 20");
+        }
+        [[clang::truncate_mantissa(20)]] // using source-to-source-transform
+#endif
         double _d;
     
         PackedDouble() : _d(0.0) 

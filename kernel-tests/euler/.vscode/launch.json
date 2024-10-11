@@ -5,6 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "debug main",
             "type": "cppdbg",
             "request": "launch",
@@ -18,7 +25,14 @@
             "request": "launch",
             "program": "${workspaceRoot}/kernel-benchmarks-fv-rusanov.py",
             "cwd": "${workspaceFolder}",
-            "args": ["-d", "2", "-ps", "8", "-p", "512"],
+            "args": [
+                "-d",
+                "2",
+                "-ps",
+                "8",
+                "-p",
+                "512"
+            ],
             "python": "/home/zhouxing/.conda/envs/peano/bin/python"
         }
     ]
