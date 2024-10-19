@@ -259,6 +259,10 @@ else:
 
 my_project.constants.define_value("GAMMA", str(1.0))
 
+my_project.constants.export_constexpr_with_type(
+    "IterationsPerTransfer", str(100), "int"
+)
+
 os.system(
     "cp {} KernelBenchmarksFVRusanov-main.cpp".format(
         "../KernelBenchmarksFVRusanov-main.cpp"
