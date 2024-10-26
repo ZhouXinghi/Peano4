@@ -1,6 +1,9 @@
 # large files
 *.nc
 
+# results
+results*/
+
 # Prerequisites
 *.d
 

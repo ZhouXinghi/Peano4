@@ -62,23 +62,22 @@ namespace exahype2::fv::rusanov::omp::internal {
     double*  t = (double*)omp_target_alloc(numberOfCells * sizeof(double), targetDevice);
     double*  dt = (double*)omp_target_alloc(numberOfCells * sizeof(double), targetDevice);
     // convert to double
-    #pragma omp target teams distribute parallel for simd device(targetDevice) collapse(2) firstprivate(QInEnumerator) nowait
+    #pragma omp target teams distribute parallel for simd device(targetDevice) collapse(2) firstprivate(QInEnumerator)
     for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
         for (int i = 0; i < QInEnumerator.size(); ++i) {
             mappedPointersToQIn[patchIndex][i] = mappedPointersToQInPacked[patchIndex][i]._d;
         }
     }
-    #pragma omp target distribute parallel for simd device(targetDevice) nowait
+    #pragma omp target distribute parallel for simd device(targetDevice) 
     for (int i = 0; i < Dimensions * numberOfCells; ++i) {
         rawPointerToCellCentre[i] = rawPointerToCellCentrePacked[i]._d;
         rawPointerToCellSize[i] = rawPointerToCellSizePacked[i]._d;
     }
-    #pragma omp target distribute parallel for simd  device(targetDevice) nowait
+    #pragma omp target distribute parallel for simd  device(targetDevice) 
     for (int i = 0; i < numberOfCells; ++i) {
         t[i] = tPacked[i]._d;
         dt[i] = dtPacked[i]._d;
     }
-    #pragma omp taskwait
     // #pragma omp target teams device(targetDevice)
     // {
     //     #pragma omp distribute parallel for simd
@@ -165,19 +164,17 @@ namespace exahype2::fv::rusanov::omp::internal {
 
     
     // convert to PackedDouble
-    #pragma omp target teams distribute parallel for simd collapse(2) firstprivate(QOutEnumerator) nowait
+    #pragma omp target teams distribute parallel for simd collapse(2) firstprivate(QOutEnumerator)
     for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
         for (int i = 0; i < QOutEnumerator.size(); ++i) {
             mappedPointersToQOutPacked[patchIndex][i]._d = mappedPointersToQOut[patchIndex][i];
         }
     }
 
-    #pragma omp target teams distribute parallel for simd nowait
+    #pragma omp target teams distribute parallel for simd 
     for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
         maxEigenvaluePacked[patchIndex]._d = maxEigenvalue[patchIndex];
     }
-
-    #pragma omp taskwait
 
 
     // release buffers

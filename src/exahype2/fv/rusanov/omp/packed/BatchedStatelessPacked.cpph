@@ -91,7 +91,7 @@ namespace exahype2::fv::rusanov::omp::internal {
     double*  maxEigenvalue = (double*)omp_target_alloc(numberOfCells * sizeof(double), targetDevice);
     double** mappedPointersToQOut = new double*[numberOfCells];
     for (int i = 0; i < numberOfCells; ++i) {
-        mappedPointersToQOut[i] = (double*)omp_target_alloc(numberOfCells * sizeof(double*), targetDevice);
+        mappedPointersToQOut[i] = (double*)omp_target_alloc(QOutEnumerator.size() * sizeof(double*), targetDevice);
     }
 #pragma omp target enter data map(to: mappedPointersToQOut[0: numberOfCells])
 

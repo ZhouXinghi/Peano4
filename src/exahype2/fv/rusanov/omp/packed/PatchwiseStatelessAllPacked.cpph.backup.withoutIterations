@@ -12,9 +12,7 @@ namespace exahype2::fv::rusanov::omp::internal {
     bool EvaluateNonconservativeProduct,
     bool EvaluateSource,
     bool EvaluateMaximumEigenvalueAfterTimeStep,
-    class TempDataEnumeratorType,
-    int IterationsPerTransfer
->
+    class TempDataEnumeratorType>
   KeywordToAvoidDuplicateSymbolsForInlinedFunctions void timeStepWithRusanovPatchwiseStatelessAllPacked(
     int           targetDevice,
     int           numberOfCells,
@@ -41,6 +39,37 @@ namespace exahype2::fv::rusanov::omp::internal {
     const TempDataEnumeratorType                 ncpEnumerator(numberOfCells, NumberOfVolumesPerAxisInPatch + 1, HaloSize, NumberOfUnknowns, 0);
     const TempDataEnumeratorType                 eigenvalueEnumerator(numberOfCells, NumberOfVolumesPerAxisInPatch, HaloSize, 1, 0);
 
+    // alloc buffers 
+    double** mappedPointersToQIn = new double*[numberOfCells];
+    for (int i = 0; i < numberOfCells; ++i) {
+        mappedPointersToQIn[i] = (double*)omp_target_alloc(QInEnumerator.size() * sizeof(double), targetDevice);
+    }
+#pragma omp target enter data map(to: mappedPointersToQIn[0: numberOfCells])
+
+    double*  rawPointerToCellCentre = (double*)omp_target_alloc(Dimensions * numberOfCells * sizeof(double), targetDevice);
+    double*  rawPointerToCellSize = (double*)omp_target_alloc(Dimensions * numberOfCells * sizeof(double), targetDevice);
+    double*  t = (double*)omp_target_alloc(numberOfCells * sizeof(double), targetDevice);
+    double*  dt = (double*)omp_target_alloc(numberOfCells * sizeof(double), targetDevice);
+    // convert to double
+    #pragma omp target teams device(targetDevice)
+    {
+        #pragma omp distribute parallel for simd collapse(2)
+        for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
+            for (int i = 0; i < QInEnumerator.size(); ++i) {
+                mappedPointersToQIn[patchIndex][i] = mappedPointersToQInPacked[patchIndex][i]._d;
+            }
+        }
+        #pragma omp distribute parallel for simd
+        for (int i = 0; i < Dimensions * numberOfCells; ++i) {
+            rawPointerToCellCentre[i] = rawPointerToCellCentrePacked[i];
+            rawPointerToCellSize[i] = rawPointerToCellSizePacked[i];
+        }
+        #pragma omp distribute parallel for simd 
+        for (int i = 0; i < numberOfCells; ++i) {
+            t[i] = tPacked[i];
+            dt[i] = dtPacked[i];
+        }
+    }
 
     // alloc buffers for output data
     double*  maxEigenvalue = (double*)omp_target_alloc(numberOfCells * sizeof(double), targetDevice);
@@ -48,137 +77,53 @@ namespace exahype2::fv::rusanov::omp::internal {
     for (int i = 0; i < numberOfCells; ++i) {
         mappedPointersToQOut[i] = (double*)omp_target_alloc(QOutEnumerator.size() * sizeof(double), targetDevice);
     }
+#pragma omp target enter data map(to: mappedPointersToQOut[0: numberOfCells])
 
-    // alloc buffers 
-    double** mappedPointersToQIn = new double*[numberOfCells];
-    for (int i = 0; i < numberOfCells; ++i) {
-        mappedPointersToQIn[i] = (double*)omp_target_alloc(QInEnumerator.size() * sizeof(double), targetDevice);
-    }
-#pragma omp target enter data map(to: mappedPointersToQIn[0: numberOfCells]) device(targetDevice) 
-#pragma omp target enter data map(to: mappedPointersToQOut[0: numberOfCells]) device(targetDevice) 
+    timeStepWithRusanovPatchwiseStateless<
+        SolverType,
+        NumberOfVolumesPerAxisInPatch,
+        HaloSize,
+        NumberOfUnknowns,
+        NumberOfAuxiliaryVariables,
+        EvaluateFlux,
+        EvaluateNonconservativeProduct,
+        EvaluateSource,
+        EvaluateMaximumEigenvalueAfterTimeStep,
+        TempDataEnumeratorType>(
+            targetDevice,
+            numberOfCells,
+            mappedPointersToQIn,
+            rawPointerToCellCentre,
+            rawPointerToCellSize,
+            t,
+            dt,
+            maxEigenvalue,
+            mappedPointersToQOut,
+            tempFluxX,
+            tempFluxY,
+            tempFluxZ,
+            tempNonconservativeProductX,
+            tempNonconservativeProductY,
+            tempNonconservativeProductZ,
+            tempEigenvalueX,
+            tempEigenvalueY,
+            tempEigenvalueZ
+        );
 
-    double*  rawPointerToCellCentre = (double*)omp_target_alloc(Dimensions * numberOfCells * sizeof(double), targetDevice);
-    double*  rawPointerToCellSize = (double*)omp_target_alloc(Dimensions * numberOfCells * sizeof(double), targetDevice);
-    double*  t = (double*)omp_target_alloc(numberOfCells * sizeof(double), targetDevice);
-    double*  dt = (double*)omp_target_alloc(numberOfCells * sizeof(double), targetDevice);
-    // convert to double
-    #pragma omp target teams distribute parallel for simd device(targetDevice) collapse(2) firstprivate(QInEnumerator) nowait
-    for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
-        for (int i = 0; i < QInEnumerator.size(); ++i) {
-            mappedPointersToQIn[patchIndex][i] = mappedPointersToQInPacked[patchIndex][i]._d;
-        }
-    }
-    #pragma omp target distribute parallel for simd device(targetDevice) nowait
-    for (int i = 0; i < Dimensions * numberOfCells; ++i) {
-        rawPointerToCellCentre[i] = rawPointerToCellCentrePacked[i]._d;
-        rawPointerToCellSize[i] = rawPointerToCellSizePacked[i]._d;
-    }
-    #pragma omp target distribute parallel for simd  device(targetDevice) nowait
-    for (int i = 0; i < numberOfCells; ++i) {
-        t[i] = tPacked[i]._d;
-        dt[i] = dtPacked[i]._d;
-    }
-    #pragma omp taskwait
-    // #pragma omp target teams device(targetDevice)
-    // {
-    //     #pragma omp distribute parallel for simd
-    //     for (int i = 0; i < Dimensions * numberOfCells; ++i) {
-    //         rawPointerToCellCentre[i] = rawPointerToCellCentrePacked[i]._d;
-    //         rawPointerToCellSize[i] = rawPointerToCellSizePacked[i]._d;
-    //     }
-    //     #pragma omp distribute parallel for simd 
-    //     for (int i = 0; i < numberOfCells; ++i) {
-    //         t[i] = tPacked[i]._d;
-    //         dt[i] = dtPacked[i]._d;
-    //     }
-    // }
-
-
-// //         // debug
-// // #pragma omp target device(targetDevice)
-// //             for (int i = 0; i < 1; ++i) {
-// //                 // std::printf("%f\n", maxEigenvalue[i]);
-// //                 // std::printf("%f\n", t[i]);
-// //                 std::printf("%f\n", tPacked[i]._d);
-// //                 for (int j = 0; j < 5; ++j)
-// //                     // std::printf("%f\n", mappedPointersToQOut[i][j]);
-// //                     // std::printf("%f\n", mappedPointersToQIn[i][j]);
-// //                     std::printf("%f\n", mappedPointersToQInPacked[i][j]._d);
-// //                 std::printf("\n");
-// //             }
-// //
-//         // debug
-// #pragma omp target device(targetDevice)
-//             for (int i = 0; i < 1; ++i) {
-//                 // std::printf("%f\n", maxEigenvalue[i]);
-//                 std::printf("%f\n", t[i]);
-//                 // std::printf("%f\n", tPacked[i]._d);
-//                 for (int j = 0; j < 5; ++j)
-//                     // std::printf("%f\n", mappedPointersToQOut[i][j]);
-//                     std::printf("%f\n", mappedPointersToQIn[i][j]);
-//                     // std::printf("%f\n", mappedPointersToQInPacked[i][j]._d);
-//                 std::printf("\n");
-            // }
-
-    for (int i = 0; i < IterationsPerTransfer; ++i) {
-
-        ::exahype2::fv::rusanov::omp::internal::timeStepWithRusanovPatchwiseStateless<
-            SolverType,
-            NumberOfVolumesPerAxisInPatch,
-            HaloSize,
-            NumberOfUnknowns,
-            NumberOfAuxiliaryVariables,
-            EvaluateFlux,
-            EvaluateNonconservativeProduct,
-            EvaluateSource,
-            EvaluateMaximumEigenvalueAfterTimeStep,
-            TempDataEnumeratorType>(
-                targetDevice,
-                numberOfCells,
-                mappedPointersToQIn,
-                rawPointerToCellCentre,
-                rawPointerToCellSize,
-                t,
-                dt,
-                maxEigenvalue,
-                mappedPointersToQOut,
-                tempFluxX,
-                tempFluxY,
-                tempFluxZ,
-                tempNonconservativeProductX,
-                tempNonconservativeProductY,
-                tempNonconservativeProductZ,
-                tempEigenvalueX,
-                tempEigenvalueY,
-                tempEigenvalueZ
-            );
-
-//     // debug
-// #pragma omp target device(targetDevice)
-//             for (int i = 0; i < 1; ++i) {
-//                 std::printf("%f\n", maxEigenvalue[i]);
-//                 for (int j = 0; j < 5; ++j)
-//                     std::printf("%f\n", mappedPointersToQOut[i][j]);
-//                 std::printf("\n");
-//             }
-    }
-
-    
     // convert to PackedDouble
-    #pragma omp target teams distribute parallel for simd collapse(2) firstprivate(QOutEnumerator) nowait
-    for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
-        for (int i = 0; i < QOutEnumerator.size(); ++i) {
-            mappedPointersToQOutPacked[patchIndex][i]._d = mappedPointersToQOut[patchIndex][i];
+    #pragma omp target teams
+    {
+        #pragma omp distribute parallel for simd collapse(2)
+        for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
+            for (int i = 0; i < QOutEnumerator.size(); ++i) {
+                mappedPointersToQOutPacked[patchIndex][i]._d = mappedPointersToQOut[patchIndex][i];
+            }
+        }
+        #pragma omp distribute parallel for simd
+        for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
+            maxEigenvaluePacked[patchIndex]._d = maxEigenvalue[patchIndex];
         }
     }
-
-    #pragma omp target teams distribute parallel for simd nowait
-    for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
-        maxEigenvaluePacked[patchIndex]._d = maxEigenvalue[patchIndex];
-    }
-
-    #pragma omp taskwait
-
 
     // release buffers
     #pragma omp target exit data map(delete: mappedPointersToQIn[0: numberOfCells])
@@ -215,9 +160,7 @@ template <
   bool EvaluateNonconservativeProduct,
   bool EvaluateSource,
   bool EvaluateMaximumEigenvalueAfterTimeStep,
-  class TempDataEnumeratorType,
-  int IterationsPerTransfer
->
+  class TempDataEnumeratorType>
 void exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessAllPacked(int targetDevice, CellData& patchData) {
     const enumerator::AoSLexicographicEnumerator QInEnumerator(1, NumberOfVolumesPerAxisInPatch, HaloSize, NumberOfUnknowns, NumberOfAuxiliaryVariables);
     const enumerator::AoSLexicographicEnumerator QOutEnumerator(1, NumberOfVolumesPerAxisInPatch, 0, NumberOfUnknowns, NumberOfAuxiliaryVariables);
@@ -235,17 +178,6 @@ void exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessAllPac
     double* tempEigenvalueX             = new double[eigenvalueEnumerator.size()];
     double* tempEigenvalueY             = new double[eigenvalueEnumerator.size()];
     double* tempEigenvalueZ             = new double[eigenvalueEnumerator.size()];
-
-// #pragma omp target enter data map(alloc : tempFluxX[0 : fluxEnumerator.size()]) device(targetDevice) nowait
-// #pragma omp target enter data map(alloc : tempFluxY[0 : fluxEnumerator.size()]) device(targetDevice) nowait
-// #pragma omp target enter data map(alloc : tempFluxZ[0 : fluxEnumerator.size()]) device(targetDevice) nowait
-// #pragma omp target enter data map(alloc : tempNonconservativeProductX[0 : ncpEnumerator.size()]) device(targetDevice) nowait
-// #pragma omp target enter data map(alloc : tempNonconservativeProductY[0 : ncpEnumerator.size()]) device(targetDevice) nowait
-// #pragma omp target enter data map(alloc : tempNonconservativeProductZ[0 : ncpEnumerator.size()]) device(targetDevice) nowait
-// #pragma omp target enter data map(alloc : tempEigenvalueX[0 : eigenvalueEnumerator.size()]) device(targetDevice) nowait
-// #pragma omp target enter data map(alloc : tempEigenvalueY[0 : eigenvalueEnumerator.size()]) device(targetDevice) nowait
-// #pragma omp target enter data map(alloc : tempEigenvalueZ[0 : eigenvalueEnumerator.size()]) device(targetDevice) nowait
-// #pragma omp taskwait
 
 #pragma omp target enter data map(alloc : tempFluxX[0 : fluxEnumerator.size()]) device(targetDevice) 
 #pragma omp target enter data map(alloc : tempFluxY[0 : fluxEnumerator.size()]) device(targetDevice) 
@@ -283,8 +215,8 @@ void exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessAllPac
     internal::copy(maxEigenvaluePacked, patchData.maxEigenvalue, numberOfCells);
 
     // ========================= transfer data
-    PackedDouble** mappedPointersToQInPacked = (PackedDouble**)(new PackedDouble*[numberOfCells]);
-    PackedDouble** mappedPointersToQOutPacked = (PackedDouble**)(new PackedDouble*[numberOfCells]);
+    PackedDouble** mappedPointersToQInPacked = (PackedDouble**)(void**)(new PackedDouble*[numberOfCells]);
+    PackedDouble** mappedPointersToQOutPacked = (PackedDouble**)(void**)(new PackedDouble*[numberOfCells]);
 
     for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
         const PackedDouble* currentQInPacked = QInPacked[patchIndex];
@@ -304,9 +236,6 @@ void exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessAllPac
 #pragma omp target enter data map(to : tPacked[0 : numberOfCells]) device(targetDevice) 
 #pragma omp target enter data map(to : dtPacked[0 : numberOfCells]) device(targetDevice) 
 #pragma omp target enter data map(alloc : maxEigenvaluePacked[0 : numberOfCells]) device(targetDevice) 
-
-// #pragma omp taskwait
-
 //
 //     // =================================== Decompress data in GPU
 //     double** mappedPointersToQIn = new double*[numberOfCells];
@@ -359,9 +288,7 @@ void exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessAllPac
       EvaluateNonconservativeProduct,
       EvaluateSource,
       EvaluateMaximumEigenvalueAfterTimeStep,
-      TempDataEnumeratorType,
-      IterationsPerTransfer
-        >(
+      TempDataEnumeratorType>(
       targetDevice,
       numberOfCells,
       /*(PackedDouble**)*/mappedPointersToQInPacked,

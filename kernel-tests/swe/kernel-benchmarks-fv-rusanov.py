@@ -5,6 +5,22 @@ import sys
 import argparse
 import peano4
 import exahype2
+import shutil
+
+def modify_cmake_file(dimension):
+    # 复制模板文件
+    shutil.copy('../CMakeLists.txt', f'CMakeLists.txt')
+
+    # 修改文件内容
+    with open(f'CMakeLists.txt', 'r') as file:
+        content = file.read()
+
+    # 替换dimension相关的内容
+    modified_content = content.replace('{{DIMENSION}}', str(dimension))
+
+    # 保存修改后的文件
+    with open(f'CMakeLists.txt', 'w') as file:
+        file.write(modified_content)
 
 build_modes = {
     "Release": peano4.output.CompileMode.Release,
@@ -18,6 +34,22 @@ build_mode = "Release"
 
 parser = argparse.ArgumentParser(
     description="ExaHyPE 2 - Finite Volumes Rusanov Kernel Benchmarking Script"
+)
+
+parser.add_argument(
+    "-i",
+    "--iterations",
+    dest="total_iterations",
+    default=20,
+    type=int,
+    help="Total iterations",
+)
+parser.add_argument(
+    "--ite_per_transfer",
+    dest="iterations_per_transfer",
+    default=5,
+    type=int,
+    help="iterations per transfer",
 )
 parser.add_argument(
     "-m",
@@ -167,7 +199,7 @@ my_solver.set_implementation(
         ncp="::applications::exahype2::swe::nonconservativeProduct(Q, deltaQ, faceCentre, volumeH, t, dt, normal, BTimesDeltaQ);",
         eigenvalues="""
   double L[3]{0.0};
-  eigenvalues(Q, faceCentre, volumeH, t, dt, normal, L);
+  ::applications::exahype2::swe::eigenvalues(Q, faceCentre, volumeH, t, dt, normal, L);
   return std::max({std::abs(L[0]), std::abs(L[1]), std::abs(L[2])});
 """,
         # There is a bug in the code generator: When set to 'None_Implementation', an offloadable function is still generated, also 'Empty_Implementation' does not work.
@@ -238,17 +270,27 @@ else:
 
 my_project.constants.define_value("GAMMA", str(1.0))
 
+my_project.constants.export_constexpr_with_type(
+    "TotalIterations", str(args.total_iterations), "int"
+)
+
+my_project.constants.export_constexpr_with_type(
+    "IterationsPerTransfer", str(args.iterations_per_transfer), "int"
+)
+
 os.system(
     "cp {} KernelBenchmarksFVRusanov-main.cpp".format(
         "../KernelBenchmarksFVRusanov-main.cpp"
     )
 )
 
-os.system(
-    "cp {} CMakeLists.txt".format(
-        "../CMakeLists.txt"
-    )
-)
+modify_cmake_file(args.dim);
+
+# os.system(
+#     "cp {} CMakeLists.txt".format(
+#         "../CMakeLists.txt"
+#     )
+# )
 
 os.system(
     "cp {} cmake.sh".format(

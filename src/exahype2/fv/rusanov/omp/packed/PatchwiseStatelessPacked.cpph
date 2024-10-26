@@ -12,7 +12,9 @@ namespace exahype2::fv::rusanov::omp::internal {
     bool EvaluateNonconservativeProduct,
     bool EvaluateSource,
     bool EvaluateMaximumEigenvalueAfterTimeStep,
-    class TempDataEnumeratorType>
+    class TempDataEnumeratorType,
+    int IterationsPerTransfer
+>
   KeywordToAvoidDuplicateSymbolsForInlinedFunctions void timeStepWithRusanovPatchwiseStatelessPacked(
     int           targetDevice,
     int           numberOfCells,
@@ -46,13 +48,11 @@ namespace exahype2::fv::rusanov::omp::internal {
     }
 #pragma omp target enter data map(to: mappedPointersToQIn[0: numberOfCells]) device(targetDevice)
 
-    #pragma omp target teams device(targetDevice)
-    {
-        #pragma omp distribute parallel for simd collapse(2)
-        for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
-            for (int i = 0; i < QInEnumerator.size(); ++i) {
-                mappedPointersToQIn[patchIndex][i] = mappedPointersToQInPacked[patchIndex][i]._d;
-            }
+    // convert to double
+    #pragma omp target teams distribute parallel for simd collapse(2) firstprivate(QInEnumerator) device(targetDevice) 
+    for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
+        for (int i = 0; i < QInEnumerator.size(); ++i) {
+            mappedPointersToQIn[patchIndex][i] = mappedPointersToQInPacked[patchIndex][i]._d;
         }
     }
 
@@ -63,7 +63,18 @@ namespace exahype2::fv::rusanov::omp::internal {
     }
 #pragma omp target enter data map(to: mappedPointersToQOut[0: numberOfCells]) device(targetDevice)
 
+//         // debug
+// #pragma omp target device(targetDevice)
+//             for (int i = 0; i < 1; ++i) {
+//                 // std::printf("%f\n", maxEigenvalue[i]);
+//                 std::printf("%f\n", t[i]);
+//                 for (int j = 0; j < 5; ++j)
+//                     // std::printf("%f\n", mappedPointersToQOut[i][j]);
+//                     std::printf("%f\n", mappedPointersToQIn[i][j]);
+//                 std::printf("\n");
+//             }
 
+    for (int i = 0; i < IterationsPerTransfer; ++i)
     timeStepWithRusanovPatchwiseStateless
         <
         SolverType,
@@ -96,14 +107,11 @@ namespace exahype2::fv::rusanov::omp::internal {
             tempEigenvalueZ
         ); 
 
-    #pragma omp target teams
-    {
-        // convert to PackedDouble
-        #pragma omp distribute parallel for simd collapse(2)
-        for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
-            for (int i = 0; i < QOutEnumerator.size(); ++i) {
-                mappedPointersToQOutPacked[patchIndex][i]._d = mappedPointersToQOut[patchIndex][i];
-            }
+    // convert to PackedDouble
+    #pragma omp target teams distribute parallel for simd collapse(2) firstprivate(QOutEnumerator) device(targetDevice) 
+    for (int patchIndex = 0; patchIndex < numberOfCells; ++patchIndex) {
+        for (int i = 0; i < QOutEnumerator.size(); ++i) {
+            mappedPointersToQOutPacked[patchIndex][i]._d = mappedPointersToQOut[patchIndex][i];
         }
     }
     
@@ -135,7 +143,9 @@ template <
   bool EvaluateNonconservativeProduct,
   bool EvaluateSource,
   bool EvaluateMaximumEigenvalueAfterTimeStep,
-  class TempDataEnumeratorType>
+  class TempDataEnumeratorType,
+  int IterationsPerTransfer
+>
 void exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessPacked(int targetDevice, CellData& patchData) {
     const enumerator::AoSLexicographicEnumerator QInEnumerator(1, NumberOfVolumesPerAxisInPatch, HaloSize, NumberOfUnknowns, NumberOfAuxiliaryVariables);
     const enumerator::AoSLexicographicEnumerator QOutEnumerator(1, NumberOfVolumesPerAxisInPatch, 0, NumberOfUnknowns, NumberOfAuxiliaryVariables);
@@ -222,7 +232,9 @@ void exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessPacked
       EvaluateNonconservativeProduct,
       EvaluateSource,
       EvaluateMaximumEigenvalueAfterTimeStep,
-      TempDataEnumeratorType>(
+      TempDataEnumeratorType,
+      IterationsPerTransfer
+        >(
       targetDevice,
       numberOfCells,
       mappedPointersToQInPacked,

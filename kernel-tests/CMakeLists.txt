@@ -14,6 +14,7 @@ if (USE_HPC_EXT)
     add_compile_definitions(USE_HPC_EXT)
 else()
     set(CMAKE_CXX_COMPILER /home/zhouxing/Documents/Masterarbeit/llvm-extended/bin/clang++)
+    # set(CMAKE_CXX_COMPILER clang++)
     add_compile_definitions(USE_SOURCE_TO_SOURCE_TRANSFORM)
 endif()
 
@@ -28,8 +29,10 @@ aux_source_directory(. SRC)
 
 
 #set(CMAKE_CXX_FLAGS "-std=c++17 -O3 -w -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_89 -DDimensions=2 -DPeanoDebug=0 -L/home/zhouxing/Documents/Masterarbeit/Peano/src  -L/home/zhouxing/Documents/Masterarbeit/Peano/src/toolbox/loadbalancing  -L/home/zhouxing/Documents/Masterarbeit/Peano/src/toolbox/blockstructured  -L/home/zhouxing/Documents/Masterarbeit/Peano/src/exahype2 -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_89 -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -L../../../..//src -lExaHyPE2Core2d  -lToolboxBlockstructured2d   -lToolboxLoadBalancing2d -lPeano4Core2d    -lTarch")
-#set(CMAKE_CXX_FLAGS "-w -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_89 -DDimensions=2 -DPeanoDebug=0")
-set(CMAKE_CXX_FLAGS "-w -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_89 -DDimensions=${DIMENSION} -DPeanoDebug=0")
+# set(CMAKE_CXX_FLAGS "-w -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_89 -DDimensions=2 -DPeanoDebug=0")
+set(CMAKE_CXX_FLAGS "-W -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_89 -DDimensions=${DIMENSION} -DPeanoDebug=0")
+# set(CMAKE_CXX_FLAGS "-W -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_89 -DDimensions=${DIMENSION} -DPeanoDebug=0 -Wall -Wextra -Wpedantic -fsanitize=address")
+# set(CMAKE_CXX_FLAGS "-g -W -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_89 -DDimensions=${DIMENSION} -DPeanoDebug=0 -Wall -Wextra -Wpedantic -fsanitize=memory,undefined -fsanitize-memory-track-origins")
 
 add_executable(kernelTestMain ${SRC})
 target_include_directories(kernelTestMain PUBLIC . .. ../../src)

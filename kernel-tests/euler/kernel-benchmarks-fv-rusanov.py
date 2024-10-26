@@ -41,6 +41,21 @@ parser = argparse.ArgumentParser(
     description="ExaHyPE 2 - Finite Volumes Rusanov Kernel Benchmarking Script"
 )
 parser.add_argument(
+    "-i",
+    "--iterations",
+    dest="total_iterations",
+    default=20,
+    type=int,
+    help="Total iterations",
+)
+parser.add_argument(
+    "--ite_per_transfer",
+    dest="iterations_per_transfer",
+    default=5,
+    type=int,
+    help="iterations per transfer",
+)
+parser.add_argument(
     "-m",
     "--build-mode",
     dest="build_mode",
@@ -260,7 +275,11 @@ else:
 my_project.constants.define_value("GAMMA", str(1.0))
 
 my_project.constants.export_constexpr_with_type(
-    "IterationsPerTransfer", str(100), "int"
+    "TotalIterations", str(args.total_iterations), "int"
+)
+
+my_project.constants.export_constexpr_with_type(
+    "IterationsPerTransfer", str(args.iterations_per_transfer), "int"
 )
 
 os.system(

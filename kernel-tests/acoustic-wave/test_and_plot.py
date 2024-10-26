@@ -6,10 +6,10 @@ import json
 
 def run_test(ps_value, d_value):
     # Clean previous builds
-    subprocess.run("make clean && make distclean", shell=True, check=True)
+    subprocess.run("make clean && make distclean", shell=True, check=False)
     # Run the Python script with the specified -ps and -d values
     # This generates the C++ files required for benchmarking
-    command = f"python kernel-benchmarks-fv-rusanov.py -d {d_value} -ps {ps_value} -gpu"
+    command = f"python kernel-benchmarks-fv-rusanov.py -d {d_value} -ps {ps_value} -gpu --iterations 20 --ite_per_transfer 5"
     subprocess.run(command, shell=True, check=True)
 
     # Compile the generated C++ files using the cmake.sh script
@@ -21,18 +21,19 @@ def run_test(ps_value, d_value):
 
 def parse_results(output):
     # Use regex to extract timing information from the output of the executable
-    pattern = r"========Patches = (\d+)\n.*?CPU: (\d+\.\d+)s.*?timeStepWithRusanovPatchwiseHeapStateless: (\d+\.\d+)s.*?PatchWiseGPUPacked: (\d+\.\d+)s.*?PatchWiseGPUAllPacked: (\d+\.\d+)s"
+    # pattern = r"========Patches = (\d+)\n.*?CPU: (\d+\.\d+)s.*?timeStepWithRusanovPatchwiseHeapStateless: (\d+\.\d+)s.*?PatchWiseGPUPacked: (\d+\.\d+)s.*?PatchWiseGPUAllPacked: (\d+\.\d+)s"
+    pattern = r"========Patches = (\d+)\n.*?CPU: (\d+\.\d+)s.*?timeStepWithRusanovPatchwiseHeapStateless: (\d+\.\d+)s.*?PatchWiseGPUAllPacked: (\d+\.\d+)s"
     matches = re.findall(pattern, output, re.DOTALL)
     
     # Store the extracted data in a list of dictionaries for easy access
     results = []
     for match in matches:
-        patches, cpu, heap_stateless, gpu_packed, gpu_all_packed = match
+        patches, cpu, heap_stateless, gpu_all_packed = match
         results.append({
             'patches': int(patches),
             'cpu': float(cpu),
             'heap_stateless': float(heap_stateless),
-            'gpu_packed': float(gpu_packed),
+            # 'gpu_packed': float(gpu_packed),
             'gpu_all_packed': float(gpu_all_packed),
         })
     return results
@@ -47,14 +48,14 @@ def plot_results(results, ps_values, d_value, output_folder):
         patches = [r['patches'] for r in result_set]
         cpu_times = [r['cpu'] for r in result_set]
         heap_stateless_times = [r['heap_stateless'] for r in result_set]
-        gpu_packed_times = [r['gpu_packed'] for r in result_set]
+        # gpu_packed_times = [r['gpu_packed'] for r in result_set]
         gpu_all_packed_times = [r['gpu_all_packed'] for r in result_set]
 
         # Create a plot for the current patch size
         plt.figure(figsize=(10, 6))
         plt.plot(patches, cpu_times, label='CPU', marker='o')
         plt.plot(patches, heap_stateless_times, label='Heap Stateless', marker='o')
-        plt.plot(patches, gpu_packed_times, label='GPU Packed', marker='o')
+        # plt.plot(patches, gpu_packed_times, label='GPU Packed', marker='o')
         plt.plot(patches, gpu_all_packed_times, label='GPU All Packed', marker='o')
 
         # Add labels, title, legend, and grid to the plot
@@ -70,8 +71,9 @@ def plot_results(results, ps_values, d_value, output_folder):
 
 def main():
     d_values = [2, 3]
-    results_folder = "results-hpc-ext"
-    # results_folder = "results-source-to-source-transform"
+    # d_values = [2]
+    # results_folder = "results-hpc-ext"
+    results_folder = "results-source-to-source-transform"
     os.makedirs(results_folder, exist_ok=True)
 
     for d_value in d_values:
