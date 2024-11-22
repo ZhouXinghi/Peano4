@@ -36,6 +36,21 @@ int IterationsPerTransfer
 >
 KeywordToAvoidDuplicateSymbolsForInlinedFunctions void timeStepWithRusanovPatchwiseHeapStatelessPacked(int targetDevice, CellData& patchData) InlineMethod;
 
+template <
+class SolverType,
+int  NumberOfVolumesPerAxisInPatch,
+int  HaloSize,
+int  NumberOfUnknowns,
+int  NumberOfAuxiliaryVariables,
+bool EvaluateFlux,
+bool EvaluateNonconservativeProduct,
+bool EvaluateSource,
+bool EvaluateMaximumEigenvalueAfterTimeStep,
+class TempDataEnumeratorType,
+int IterationsPerTransfer
+>
+KeywordToAvoidDuplicateSymbolsForInlinedFunctions void timeStepWithRusanovPatchwiseHeapStatelessPackedOnTheFly(int targetDevice, CellData& patchData) InlineMethod;
+
 
 template <
 class SolverType,
@@ -129,5 +144,6 @@ public:
 #include "KernelTest.cpph"
 #include "BatchedStatelessPacked.cpph"
 #include "PatchwiseStatelessPacked.cpph"
+// #include "PatchwiseStatelessPackedOnTheFly.cpph"
 #include "PatchwiseStatelessAllPacked.cpph"
-#include "PatchwiseStateless.cpph"
+// #include "PatchwiseStateless.cpph"

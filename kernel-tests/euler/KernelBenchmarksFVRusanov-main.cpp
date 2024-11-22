@@ -151,10 +151,33 @@ int main(int argc, char** argv)
         printPatch();
         freePatchData();
 
+        initPatchData();
+        TICK(PatchWiseGPUPacked)
+        for (int i = 0; i < TotalIterations / IterationsPerTransfer; ++i) {
+            ::exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessPacked<
+                FVRusanovSolver,
+                FVRusanovSolver::NumberOfFiniteVolumesPerAxisPerPatch,
+                HaloSize,
+                FVRusanovSolver::NumberOfUnknowns,
+                FVRusanovSolver::NumberOfAuxiliaryVariables,
+                true, //EvaluateFlux,
+                false, //EvaluateNonconservativeProduct,
+                false, //EvaluateSource,
+                true, //EvaluateMaximumEigenvalueAfterTimeStep,
+                ::exahype2::enumerator::AoSLexicographicEnumerator,
+                IterationsPerTransfer
+                >
+                (device, patchData);
+                // (device, patchData, timingComputeKernel);
+        }
+        TOCK(PatchWiseGPUPacked)
+        printPatch();
+        freePatchData();
+
         // initPatchData();
         // TICK(PatchWiseGPUPacked)
         // for (int i = 0; i < TotalIterations / IterationsPerTransfer; ++i) {
-        //     ::exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessPacked<
+        //     ::exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessPackedOnTheFly<
         //         FVRusanovSolver,
         //         FVRusanovSolver::NumberOfFiniteVolumesPerAxisPerPatch,
         //         HaloSize,

@@ -224,7 +224,28 @@ namespace exahype2::fv::rusanov::omp {
     bool EvaluateMaximumEigenvalueAfterTimeStep,
     class TempDataEnumeratorType>
   KeywordToAvoidDuplicateSymbolsForInlinedFunctions void timeStepWithRusanovVolumewiseStateless(int targetDevice, CellData& patchData) InlineMethod;
+
+    // add IterationsPerTransfer
+    template <
+    class SolverType,
+    int  NumberOfVolumesPerAxisInPatch,
+    int  HaloSize,
+    int  NumberOfUnknowns,
+    int  NumberOfAuxiliaryVariables,
+    bool EvaluateFlux,
+    bool EvaluateNonconservativeProduct,
+    bool EvaluateSource,
+    bool EvaluateMaximumEigenvalueAfterTimeStep,
+    class TempDataEnumeratorType,
+    int IterationsPerTransfer
+    >
+    KeywordToAvoidDuplicateSymbolsForInlinedFunctions void timeStepWithRusanovPatchwiseHeapStateless(int targetDevice, CellData& patchData) InlineMethod;
+
+
+
 } // namespace exahype2::fv::rusanov::omp
+//
+
 
 #include "BatchedStateless.cpph"
 #include "PatchwiseStateless.cpph"
@@ -232,4 +253,8 @@ namespace exahype2::fv::rusanov::omp {
 
 #if defined(GPUOffloadingOMPPacked)
 #include "exahype2/fv/rusanov/omp/packed/rusanov.h"
+#endif
+
+#if defined(GPUOffloadingOMPOneHugeBuffer)
+#include "exahype2/fv/rusanov/omp/OneHugeBuffer/OneHugeBuffer.h"
 #endif
