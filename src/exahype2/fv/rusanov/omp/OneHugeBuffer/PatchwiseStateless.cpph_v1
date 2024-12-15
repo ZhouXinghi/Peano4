@@ -31,13 +31,11 @@ void timeStepWithRusanovPatchwiseStatelessOneHugeBuffer(
     double*       tempEigenvalueZ
 )
 {
-    enumerator::AoSLexicographicEnumerator QInEnumerator(1, NumberOfVolumesPerAxisInPatch, HaloSize, NumberOfUnknowns, NumberOfAuxiliaryVariables);
-    enumerator::AoSLexicographicEnumerator QOutEnumerator(1, NumberOfVolumesPerAxisInPatch, 0, NumberOfUnknowns, NumberOfAuxiliaryVariables);
-    TempDataEnumeratorType                  fluxEnumerator(gpuPatchData.numberOfCells, NumberOfVolumesPerAxisInPatch, HaloSize, NumberOfUnknowns, 0);
-    TempDataEnumeratorType                  ncpEnumerator(gpuPatchData.numberOfCells, NumberOfVolumesPerAxisInPatch + 1, HaloSize, NumberOfUnknowns, 0);
-    TempDataEnumeratorType                  eigenvalueEnumerator(gpuPatchData.numberOfCells, NumberOfVolumesPerAxisInPatch, HaloSize, 1, 0);
-
-// #pragma omp target enter data map(to: QInEnumerator, QOutEnumerator, fluxEnumerator, ncpEnumerator, eigenvalueEnumerator)
+    const enumerator::AoSLexicographicEnumerator QInEnumerator(1, NumberOfVolumesPerAxisInPatch, HaloSize, NumberOfUnknowns, NumberOfAuxiliaryVariables);
+    const enumerator::AoSLexicographicEnumerator QOutEnumerator(1, NumberOfVolumesPerAxisInPatch, 0, NumberOfUnknowns, NumberOfAuxiliaryVariables);
+    const TempDataEnumeratorType                  fluxEnumerator(gpuPatchData.numberOfCells, NumberOfVolumesPerAxisInPatch, HaloSize, NumberOfUnknowns, 0);
+    const TempDataEnumeratorType                  ncpEnumerator(gpuPatchData.numberOfCells, NumberOfVolumesPerAxisInPatch + 1, HaloSize, NumberOfUnknowns, 0);
+    const TempDataEnumeratorType                  eigenvalueEnumerator(gpuPatchData.numberOfCells, NumberOfVolumesPerAxisInPatch, HaloSize, 1, 0);
 
     const int numberOfCells = gpuPatchData.numberOfCells;
     const ::tarch::la::Vector<Dimensions, double>* rawPointerToCellCentre = gpuPatchData.cellCentre;
@@ -52,12 +50,6 @@ void timeStepWithRusanovPatchwiseStatelessOneHugeBuffer(
 
 #pragma omp target teams distribute device(targetDevice) firstprivate(QInEnumerator, QOutEnumerator, fluxEnumerator, ncpEnumerator, eigenvalueEnumerator) // nowait
     for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
-
-    // enumerator::AoSLexicographicEnumerator QInEnumerator(1, NumberOfVolumesPerAxisInPatch, HaloSize, NumberOfUnknowns, NumberOfAuxiliaryVariables);
-    // enumerator::AoSLexicographicEnumerator QOutEnumerator(1, NumberOfVolumesPerAxisInPatch, 0, NumberOfUnknowns, NumberOfAuxiliaryVariables);
-    // TempDataEnumeratorType                  fluxEnumerator(numberOfCells, NumberOfVolumesPerAxisInPatch, HaloSize, NumberOfUnknowns, 0);
-    // TempDataEnumeratorType                  ncpEnumerator(numberOfCells, NumberOfVolumesPerAxisInPatch + 1, HaloSize, NumberOfUnknowns, 0);
-    // TempDataEnumeratorType                  eigenvalueEnumerator(numberOfCells, NumberOfVolumesPerAxisInPatch, HaloSize, 1, 0);
       // ====================================================
       // Copy solution over and evaluate source (if required)
       // ====================================================
@@ -684,12 +676,6 @@ void timeStepWithRusanovPatchwiseStatelessOneHugeBuffer(
 
 #pragma omp target teams distribute device(targetDevice) firstprivate(QInEnumerator, QOutEnumerator, fluxEnumerator, ncpEnumerator, eigenvalueEnumerator) // nowait
     for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
-
-    // const enumerator::AoSLexicographicEnumerator QInEnumerator(1, NumberOfVolumesPerAxisInPatch, HaloSize, NumberOfUnknowns, NumberOfAuxiliaryVariables);
-    // const enumerator::AoSLexicographicEnumerator QOutEnumerator(1, NumberOfVolumesPerAxisInPatch, 0, NumberOfUnknowns, NumberOfAuxiliaryVariables);
-    // const TempDataEnumeratorType                  fluxEnumerator(numberOfCells, NumberOfVolumesPerAxisInPatch, HaloSize, NumberOfUnknowns, 0);
-    // const TempDataEnumeratorType                  ncpEnumerator(numberOfCells, NumberOfVolumesPerAxisInPatch + 1, HaloSize, NumberOfUnknowns, 0);
-    // const TempDataEnumeratorType                  eigenvalueEnumerator(numberOfCells, NumberOfVolumesPerAxisInPatch, HaloSize, 1, 0);
       // ====================================================
       // Copy solution over and evaluate source (if required)
       // ====================================================
@@ -1313,7 +1299,7 @@ void timeStepWithRusanovPatchwiseStatelessOneHugeBuffer(
     const double* const* mappedPointersToQIn = gpuPatchData.QIn;
     double** mappedPointersToQOut = gpuPatchData.QOut;
 
-#pragma omp target teams distribute device(targetDevice) firstprivate(QInEnumerator, QOutEnumerator, fluxEnumerator, ncpEnumerator, eigenvalueEnumerator) depend(in: gpuPatchData.QInCopyInOneHugeBuffer) depend(out: gpuPatchData.QOutCopyInOneHugeBuffer) nowait
+#pragma omp target teams distribute device(targetDevice) firstprivate(QInEnumerator, QOutEnumerator, fluxEnumerator, ncpEnumerator, eigenvalueEnumerator) // nowait
     for (int patchIndex = 0; patchIndex < numberOfCells; patchIndex++) {
       // ====================================================
       // Copy solution over and evaluate source (if required)
@@ -2013,14 +1999,18 @@ void exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessOneHug
 
     int nThreads = 8;
     int numberOfCellsPerThread = patchData.numberOfCells / nThreads;
+    #pragma omp parallel
+    {
+    #pragma omp single
+    {
+    // int nThreads = omp_get_num_threads();
+    // std::cout << nThreads << std::endl;
 
-    // #pragma omp parallel 
-    // #pragma omp single
     for (int threadId = 0; threadId < nThreads; ++threadId) {
 
-        // #pragma omp task
+    // int threadId = omp_get_thread_num();
+        #pragma omp task
         {
-
         auto gpuPatchData = GPUCellDataAsync(
             targetDevice, 
             numberOfCellsPerThread,
@@ -2029,48 +2019,36 @@ void exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessOneHug
             patchData.t + threadId * numberOfCellsPerThread,
             patchData.dt + threadId * numberOfCellsPerThread,
             patchData.QIn + threadId * numberOfCellsPerThread,
-            patchData.QOut + threadId * numberOfCellsPerThread,
-            patchData.maxEigenvalue + threadId * numberOfCellsPerThread,
             QInEnumerator,
             QOutEnumerator
         );
 
-        double* tempFluxX                   = new double[fluxEnumerator.size()];
-        double* tempFluxY                   = new double[fluxEnumerator.size()];
-        double* tempFluxZ                   = new double[fluxEnumerator.size()];
-        double* tempNonconservativeProductX = new double[ncpEnumerator.size()];
-        double* tempNonconservativeProductY = new double[ncpEnumerator.size()];
-        double* tempNonconservativeProductZ = new double[ncpEnumerator.size()];
-        double* tempEigenvalueX             = new double[eigenvalueEnumerator.size()];
-        double* tempEigenvalueY             = new double[eigenvalueEnumerator.size()];
-        double* tempEigenvalueZ             = new double[eigenvalueEnumerator.size()];
-
+        double* tempFluxX                   = nullptr;
+        double* tempFluxY                   = nullptr;
+        double* tempFluxZ                   = nullptr;
+        double* tempNonconservativeProductX = nullptr;
+        double* tempNonconservativeProductY = nullptr;
+        double* tempNonconservativeProductZ = nullptr;
+        double* tempEigenvalueX             = nullptr;
+        double* tempEigenvalueY             = nullptr;
+        double* tempEigenvalueZ             = nullptr;
         if constexpr (EvaluateFlux) {
-            // tempFluxX                   = (double*)omp_target_alloc(fluxEnumerator.size() * sizeof(double), targetDevice);
-            // tempFluxY                   = (double*)omp_target_alloc(fluxEnumerator.size() * sizeof(double), targetDevice);
-            #pragma omp target enter data map(alloc: tempFluxX[0 : fluxEnumerator.size()]) device(targetDevice)
-            #pragma omp target enter data map(alloc: tempFluxY[0 : fluxEnumerator.size()]) device(targetDevice)
+            tempFluxX                   = (double*)omp_target_alloc(fluxEnumerator.size() * sizeof(double), targetDevice);
+            tempFluxY                   = (double*)omp_target_alloc(fluxEnumerator.size() * sizeof(double), targetDevice);
             if constexpr (Dimensions == 3) {
-                // tempFluxZ                   = (double*)omp_target_alloc(fluxEnumerator.size() * sizeof(double), targetDevice);
-                #pragma omp target enter data map(alloc: tempFluxZ[0 : fluxEnumerator.size()]) device(targetDevice)
+                tempFluxZ                   = (double*)omp_target_alloc(fluxEnumerator.size() * sizeof(double), targetDevice);
             }
         }
         if constexpr (EvaluateNonconservativeProduct) {
-            // tempNonconservativeProductX = (double*)omp_target_alloc(ncpEnumerator.size() * sizeof(double), targetDevice);
-            // tempNonconservativeProductY = (double*)omp_target_alloc(ncpEnumerator.size() * sizeof(double), targetDevice);
-            #pragma omp target enter data map(alloc: tempNonconservativeProductX[0 : ncpEnumerator.size()]) device(targetDevice)
-            #pragma omp target enter data map(alloc: tempNonconservativeProductY[0 : ncpEnumerator.size()]) device(targetDevice)
+            tempNonconservativeProductX = (double*)omp_target_alloc(ncpEnumerator.size() * sizeof(double), targetDevice);
+            tempNonconservativeProductY = (double*)omp_target_alloc(ncpEnumerator.size() * sizeof(double), targetDevice);
             if constexpr (Dimensions == 3) {
-                // tempNonconservativeProductZ = (double*)omp_target_alloc(ncpEnumerator.size() * sizeof(double), targetDevice);
-                #pragma omp target enter data map(alloc: tempNonconservativeProductZ[0 : ncpEnumerator.size()]) device(targetDevice)
+                tempNonconservativeProductZ = (double*)omp_target_alloc(ncpEnumerator.size() * sizeof(double), targetDevice);
             }
         }
-        // tempEigenvalueX             = (double*)omp_target_alloc(eigenvalueEnumerator.size() * sizeof(double), targetDevice);
-        // tempEigenvalueY             = (double*)omp_target_alloc(eigenvalueEnumerator.size() * sizeof(double), targetDevice);
-        // tempEigenvalueZ             = (double*)omp_target_alloc(eigenvalueEnumerator.size() * sizeof(double), targetDevice);
-        #pragma omp target enter data map(alloc: tempEigenvalueX[0 : eigenvalueEnumerator.size()]) device(targetDevice)
-        #pragma omp target enter data map(alloc: tempEigenvalueY[0 : eigenvalueEnumerator.size()]) device(targetDevice)
-        #pragma omp target enter data map(alloc: tempEigenvalueZ[0 : eigenvalueEnumerator.size()]) device(targetDevice)
+        tempEigenvalueX             = (double*)omp_target_alloc(eigenvalueEnumerator.size() * sizeof(double), targetDevice);
+        tempEigenvalueY             = (double*)omp_target_alloc(eigenvalueEnumerator.size() * sizeof(double), targetDevice);
+        tempEigenvalueZ             = (double*)omp_target_alloc(eigenvalueEnumerator.size() * sizeof(double), targetDevice);
 
 
         for (int i = 0; i < IterationsPerTransfer; ++i) {
@@ -2101,47 +2079,22 @@ void exahype2::fv::rusanov::omp::timeStepWithRusanovPatchwiseHeapStatelessOneHug
                 );
         }
 
-        if constexpr (EvaluateFlux) {
-            #pragma omp target exit data map(delete: tempFluxX[0 : fluxEnumerator.size()]) device(targetDevice)
-            #pragma omp target exit data map(delete: tempFluxY[0 : fluxEnumerator.size()]) device(targetDevice)
-            if constexpr (Dimensions == 3) {
-                #pragma omp target exit data map(delete: tempFluxZ[0 : fluxEnumerator.size()]) device(targetDevice)
-            }
-        }
-        if constexpr (EvaluateNonconservativeProduct) {
-            #pragma omp target exit data map(delete: tempNonconservativeProductX[0 : ncpEnumerator.size()]) device(targetDevice)
-            #pragma omp target exit data map(delete: tempNonconservativeProductY[0 : ncpEnumerator.size()]) device(targetDevice)
-            if constexpr (Dimensions == 3) {
-                #pragma omp target exit data map(delete: tempNonconservativeProductZ[0 : ncpEnumerator.size()]) device(targetDevice)
-            }
-        }
-        #pragma omp target exit data map(delete: tempEigenvalueX[0 : eigenvalueEnumerator.size()]) device(targetDevice)
-        #pragma omp target exit data map(delete: tempEigenvalueY[0 : eigenvalueEnumerator.size()]) device(targetDevice)
-        #pragma omp target exit data map(delete: tempEigenvalueZ[0 : eigenvalueEnumerator.size()]) device(targetDevice)
+        omp_target_free(tempFluxX, targetDevice);
+        omp_target_free(tempFluxY, targetDevice);
+        omp_target_free(tempFluxZ, targetDevice);
+        omp_target_free(tempNonconservativeProductX, targetDevice);
+        omp_target_free(tempNonconservativeProductY, targetDevice);
+        omp_target_free(tempNonconservativeProductZ, targetDevice);
+        omp_target_free(tempEigenvalueX, targetDevice);
+        omp_target_free(tempEigenvalueY, targetDevice);
+        omp_target_free(tempEigenvalueZ, targetDevice);
 
-        // omp_target_free(tempFluxX, targetDevice);
-        // omp_target_free(tempFluxY, targetDevice);
-        // omp_target_free(tempFluxZ, targetDevice);
-        // omp_target_free(tempNonconservativeProductX, targetDevice);
-        // omp_target_free(tempNonconservativeProductY, targetDevice);
-        // omp_target_free(tempNonconservativeProductZ, targetDevice);
-        // omp_target_free(tempEigenvalueX, targetDevice);
-        // omp_target_free(tempEigenvalueY, targetDevice);
-        // omp_target_free(tempEigenvalueZ, targetDevice);
-
-        gpuPatchData.copyToHost(QOutEnumerator, EvaluateMaximumEigenvalueAfterTimeStep);
-
-        delete[] tempFluxX                   ;
-        delete[] tempFluxY                   ;
-        delete[] tempFluxZ                   ;
-        delete[] tempNonconservativeProductX ;
-        delete[] tempNonconservativeProductY ;
-        delete[] tempNonconservativeProductZ ;
-        delete[] tempEigenvalueX             ;
-        delete[] tempEigenvalueY             ;
-        delete[] tempEigenvalueZ             ;
-        }
+        gpuPatchData.copyToHost(patchData.QOut + threadId * numberOfCellsPerThread, patchData.maxEigenvalue + threadId * numberOfCellsPerThread, QOutEnumerator, EvaluateMaximumEigenvalueAfterTimeStep);
+        } // end of omp task
     }
+
+    } // end of omp single
+    } // end of omp parallel
 }
 
 template <
