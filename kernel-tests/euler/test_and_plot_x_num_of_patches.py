@@ -22,19 +22,17 @@ def run_test(ps_value, d_value):
 
 def parse_results(output):
     # Use regex to extract timing information from the output of the executable
-    pattern = r"========Patches = (\d+)\n.*?GPUBaseline: (\d+\.\d+)s.*?GPUOneHugeBuffer: (\d+\.\d+)s.*?GPUOneHugeBufferPacked: (\d+\.\d+)s"
+    pattern = r"========Patches = (\d+)\n.*?GPUBaseline: (\d+\.\d+)s.*?GPUPacked: (\d+\.\d+)s.*?"
     matches = re.findall(pattern, output, re.DOTALL)
     
     # Store the extracted data in a list of dictionaries for easy access
     results = []
     for match in matches:
-        patches, gpu_baseline, gpu_onehugebuffer, gpu_onehugebuffer_packed = match
+        patches, gpu_baseline, gpu_packed = match
         results.append({
             'patches': int(patches),
-            # 'cpu': float(cpu),
             'gpu_baseline': float(gpu_baseline),
-            'gpu_onehugebuffer': float(gpu_onehugebuffer),
-            'gpu_onehugebuffer_packed': float(gpu_onehugebuffer_packed),
+            'gpu_packed': float(gpu_packed),
         })
     return results
 
@@ -48,15 +46,13 @@ def plot_results(results, ps_values, d_value, output_folder):
         patches = [r['patches'] for r in result_set]
         # cpu_times = [r['cpu'] for r in result_set]
         gpu_baseline_times = [r['gpu_baseline'] for r in result_set]
-        gpu_onehugebuffer_times = [r['gpu_onehugebuffer'] for r in result_set]
-        gpu_onehugebuffer_packed_times = [r['gpu_onehugebuffer_packed'] for r in result_set]
+        gpu_packed_times = [r['gpu_packed'] for r in result_set]
 
         # Create a plot for the current patch size
         plt.figure(figsize=(10, 6))
         # plt.plot(patches, cpu_times, label='CPU', marker='o')
         plt.plot(patches, gpu_baseline_times, label='GPU Baseline', marker='o')
-        plt.plot(patches, gpu_onehugebuffer_times, label='GPU BufferAggregation', marker='o')
-        # plt.plot(patches, gpu_onehugebuffer_packed_times, label='GPU BufferAggregation Packed', marker='o')
+        plt.plot(patches, gpu_packed_times, label='GPU Packed', marker='o')
 
         # Add labels, title, legend, and grid to the plot
         plt.xlabel('Number of Patches')
@@ -77,7 +73,6 @@ def main():
     for d_value in d_values:
         if d_value == 2:
             ps_values = [4, 8, 12, 16, 20, 24, 28, 32, 36]
-            # ps_values = [4]
         else:
             ps_values = []
 
